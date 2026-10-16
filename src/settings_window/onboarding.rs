@@ -51,6 +51,7 @@ fn detected_providers(settings: &Settings) -> [bool; DRIVERS] {
             }
             ProviderKind::Antigravity => crate::antigravity::is_installed(path),
             ProviderKind::Grok => crate::grok::is_installed(path),
+            ProviderKind::CommandCode => crate::commandcode::is_installed(path),
             ProviderKind::Kiro => crate::kiro::source_is_ready(
                 path,
                 instance.kiro_crew_path.as_deref(),
@@ -84,6 +85,12 @@ fn detection_note(driver: ProviderKind, found: bool) -> &'static str {
         }
         (ProviderKind::Grok, false) => {
             crate::i18n::tr("not-found-run-grok-login-before-enabling-it")
+        }
+        (ProviderKind::CommandCode, true) => {
+            crate::i18n::tr("found-an-official-command-code-cli-sign-in-on-this-pc")
+        }
+        (ProviderKind::CommandCode, false) => {
+            crate::i18n::tr("not-found-run-cmdc-login-before-enabling-it")
         }
         (ProviderKind::Kiro, true) => {
             crate::i18n::tr("found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli")

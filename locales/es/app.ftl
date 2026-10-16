@@ -821,6 +821,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = Se encontró un inicio de sesió
 
 not-found-run-grok-login-before-enabling-it = No encontrado. Ejecuta grok login antes de activarlo.
 
+# src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = Se encontró un inicio de sesión oficial de Command Code CLI en este PC.
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = No encontrado. Ejecuta cmdc login antes de activarlo.
+
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Se encontró Kiro IDE, Kiro Crew o una Kiro CLI con sesión iniciada.
 
 not-found-install-kiro-ide-or-kiro-crew-or-sign-in-to-kiro-cli = No encontrado. Instala Kiro IDE o Kiro Crew, o inicia sesión en Kiro CLI.
@@ -1239,6 +1245,9 @@ cursor-app-folder = Carpeta de la aplicación Cursor
 
 grok-cli-folder = Carpeta de Grok CLI
 
+# src/settings_window/providers.rs
+command-code-cli-folder = Carpeta de Command Code CLI
+
 kiro-ide-folder = Carpeta de Kiro IDE
 
 kiro-crew-app-path = Ruta de la aplicación Kiro Crew
@@ -1261,6 +1270,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = Lee la cuota 
 
 reads-supergrok-subscription-credits-from-your-existing-official = Lee los créditos de la suscripción SuperGrok desde tu inicio de sesión oficial actual de Grok CLI.
 
+# src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = Lee los créditos de 5 horas, semanales y mensuales de Command Code desde tu inicio de sesión oficial actual de la CLI.
+
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = Obtiene los créditos mensuales actuales de Kiro con su inicio de sesión compartido; reconoce instalaciones de IDE, Crew y CLI.
 
 codex-desktop-app = Aplicación de escritorio de Codex
@@ -1276,6 +1288,9 @@ cursor-app = Aplicación Cursor
 antigravity-app = Aplicación Antigravity
 
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 kiro-ide = Kiro IDE
 
@@ -1498,6 +1513,9 @@ folder-with-cursor-exe-leave-empty-to-find-it-automatically-usage = Carpeta con 
 folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = Carpeta con agy.exe, agy.cmd o agy.ps1. Déjalo vacío para encontrarla automáticamente.
 
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = Carpeta con grok.exe, grok.cmd o grok.ps1. Déjalo vacío para encontrarla automáticamente.
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = Carpeta con cmdc.cmd o cmdc.ps1. Déjalo vacío para encontrarla automáticamente.
 
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Carpeta con Kiro.exe o el propio ejecutable. Déjalo vacío para encontrarlo automáticamente.
 

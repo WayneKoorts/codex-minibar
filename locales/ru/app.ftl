@@ -1219,6 +1219,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = На этом компьютер
 not-found-run-grok-login-before-enabling-it = Не найдена. Выполните grok login перед включением.
 
 # src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = На этом компьютере найдена официальная авторизация Command Code CLI.
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = Не найдена. Выполните cmdc login перед включением.
+
+# src/settings_window/onboarding.rs
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Найдены Kiro IDE, Kiro Crew или авторизованный Kiro CLI.
 
 # src/settings_window/onboarding.rs
@@ -1845,6 +1851,9 @@ cursor-app-folder = Папка приложения Cursor
 grok-cli-folder = Папка Grok CLI
 
 # src/settings_window/providers.rs
+command-code-cli-folder = Папка Command Code CLI
+
+# src/settings_window/providers.rs
 kiro-ide-folder = Папка Kiro IDE
 
 # src/settings_window/providers.rs
@@ -1878,6 +1887,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = Читает 
 reads-supergrok-subscription-credits-from-your-existing-official = Читает кредиты подписки SuperGrok из существующей официальной авторизации Grok CLI.
 
 # src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = Читает 5-часовые, недельные и месячные кредиты Command Code из существующей официальной авторизации CLI.
+
+# src/settings_window/providers.rs
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = Получает актуальные месячные кредиты Kiro через общую авторизацию; распознаёт установки IDE, Crew и CLI.
 
 # src/settings_window/providers.rs
@@ -1900,6 +1912,9 @@ antigravity-app = Приложение Antigravity
 
 # src/settings_window/providers.rs
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 # src/settings_window/providers.rs
 kiro-ide = Kiro IDE
@@ -2226,6 +2241,9 @@ folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = Папка �
 
 # application
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = Папка с grok.exe, grok.cmd или grok.ps1. Оставьте пустым для автоматического поиска.
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = Папка с cmdc.cmd или cmdc.ps1. Оставьте пустым для автоматического поиска.
 
 # application
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Папка с Kiro.exe или сам исполняемый файл. Оставьте пустым для автоматического поиска.

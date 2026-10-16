@@ -39,7 +39,7 @@ impl ProviderInstallStatus {
     pub(crate) fn checking_for(provider: ProviderKind) -> Self {
         match provider {
             ProviderKind::Kiro => Self::checking_kiro(),
-            ProviderKind::Grok => Self::checking_cli(),
+            ProviderKind::Grok | ProviderKind::CommandCode => Self::checking_cli(),
             ProviderKind::Codex | ProviderKind::Claude | ProviderKind::Antigravity => {
                 Self::checking()
             }
@@ -239,6 +239,14 @@ pub(crate) fn provider_install_status(
                 cli.as_ref().map(|_| ProviderInstallSource::Cli),
             )
         }
+        ProviderKind::CommandCode => {
+            let cli = crate::commandcode::cli_available(configured_folder);
+            (
+                None,
+                cli.as_deref().map(display_fs_path),
+                cli.as_ref().map(|_| ProviderInstallSource::Cli),
+            )
+        }
         ProviderKind::Kiro => {
             unreachable!("Kiro status is resolved before the provider match")
         }
@@ -248,7 +256,7 @@ pub(crate) fn provider_install_status(
         crew: None,
         cli,
         used,
-        app_applicable: provider != ProviderKind::Grok,
+        app_applicable: !matches!(provider, ProviderKind::Grok | ProviderKind::CommandCode),
         crew_applicable: false,
         cli_applicable: matches!(
             provider,
@@ -256,6 +264,7 @@ pub(crate) fn provider_install_status(
                 | ProviderKind::Claude
                 | ProviderKind::Antigravity
                 | ProviderKind::Grok
+                | ProviderKind::CommandCode
         ),
         checking: false,
     }
@@ -654,6 +663,11 @@ fn folder_configs(driver: ProviderKind) -> Vec<FolderConfig> {
             crate::i18n::tr("folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it"),
             r"C:\Users\you\.grok\bin",
         )],
+        ProviderKind::CommandCode => vec![binary(
+            crate::i18n::tr("command-code-cli-folder"),
+            crate::i18n::tr("folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati"),
+            r"C:\Users\you\AppData\Roaming\npm",
+        )],
         ProviderKind::Kiro => vec![
             binary(
                 crate::i18n::tr("kiro-ide-folder"),
@@ -708,6 +722,9 @@ fn provider_description(provider: ProviderKind) -> &'static str {
         ProviderKind::Kiro => {
             crate::i18n::tr("fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog")
         }
+        ProviderKind::CommandCode => {
+            crate::i18n::tr("reads-command-code-5h-weekly-and-monthly-credits-from-your-existin")
+        }
     }
 }
 
@@ -727,6 +744,7 @@ fn source_labels(provider: ProviderKind) -> (&'static str, &'static str, &'stati
         ProviderKind::Cursor => (crate::i18n::tr("cursor-app"), "", ""),
         ProviderKind::Antigravity => (crate::i18n::tr("antigravity-app"), "", "agy CLI"),
         ProviderKind::Grok => ("", "", crate::i18n::tr("grok-cli")),
+        ProviderKind::CommandCode => ("", "", crate::i18n::tr("command-code-cli")),
         ProviderKind::Kiro => (
             crate::i18n::tr("kiro-ide"),
             crate::i18n::tr("kiro-crew"),

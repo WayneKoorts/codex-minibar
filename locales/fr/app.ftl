@@ -1203,6 +1203,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = Trouvé une connexion officielle
 not-found-run-grok-login-before-enabling-it = Pas trouvé. Exécutez grok login avant de l'activer.
 
 # src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = Trouvé une connexion officielle Command Code CLI sur ce PC.
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = Pas trouvé. Exécutez cmdc login avant de l'activer.
+
+# src/settings_window/onboarding.rs
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Kiro IDE, Kiro Crew ou un Kiro CLI connecté.
 
 # src/settings_window/onboarding.rs
@@ -1829,6 +1835,9 @@ cursor-app-folder = Dossier d'application Cursor
 grok-cli-folder = Dossier Grok CLI
 
 # src/settings_window/providers.rs
+command-code-cli-folder = Dossier Command Code CLI
+
+# src/settings_window/providers.rs
 kiro-ide-folder = Dossier Kiro IDE
 
 # src/settings_window/providers.rs
@@ -1862,6 +1871,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = Lit le quota 
 reads-supergrok-subscription-credits-from-your-existing-official = Lit les crédits d'abonnement SuperGrok à partir de votre connexion officielle Grok CLI existante.
 
 # src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = Lit les crédits Command Code sur 5 heures, hebdomadaires et mensuels à partir de votre connexion officielle CLI existante.
+
+# src/settings_window/providers.rs
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = Récupère les crédits mensuels en direct de Kiro avec sa connexion partagée ; reconnaît les installations IDE, Crew et CLI.
 
 # src/settings_window/providers.rs
@@ -1884,6 +1896,9 @@ antigravity-app = Application Antigravity
 
 # src/settings_window/providers.rs
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 # src/settings_window/providers.rs
 kiro-ide = Kiro IDE
@@ -2210,6 +2225,9 @@ folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = Dossier avec
 
 # application
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = Dossier avec grok.exe, grok.cmd ou grok.ps1. Laissez vide pour le retrouver automatiquement.
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = Dossier avec cmdc.cmd ou cmdc.ps1. Laissez vide pour le retrouver automatiquement.
 
 # application
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Dossier contenant Kiro.exe, ou l'exécutable lui-même. Laissez vide pour le retrouver automatiquement.

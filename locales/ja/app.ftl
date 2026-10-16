@@ -1199,6 +1199,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = この PC で公式 Grok CLI サ
 not-found-run-grok-login-before-enabling-it = 見つかりません。有効にする前に grok login を実行してください。
 
 # src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = この PC で公式 Command Code CLI サインインが見つかりました。
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = 見つかりません。有効にする前に cmdc login を実行してください。
+
+# src/settings_window/onboarding.rs
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Kiro IDE、Kiro Crew、またはサインインした Kiro CLI が見つかりました。
 
 # src/settings_window/onboarding.rs
@@ -1825,6 +1831,9 @@ cursor-app-folder = Cursorアプリフォルダー
 grok-cli-folder = Grok CLI フォルダー
 
 # src/settings_window/providers.rs
+command-code-cli-folder = Command Code CLI フォルダー
+
+# src/settings_window/providers.rs
 kiro-ide-folder = Kiro IDE フォルダー
 
 # src/settings_window/providers.rs
@@ -1858,6 +1867,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = 既存の公�
 reads-supergrok-subscription-credits-from-your-existing-official = 既存の公式 Grok CLI サインインから SuperGrok サブスクリプション クレジットを読み取ります。
 
 # src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = 既存の公式 CLI サインインから Command Code の 5 時間、週次、月次クレジットを読み取ります。
+
+# src/settings_window/providers.rs
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = 共有サインインを使用して、Kiro のライブ月間クレジットを取得します。 IDE、Crew、および CLI インストールを認識します。
 
 # src/settings_window/providers.rs
@@ -1880,6 +1892,9 @@ antigravity-app = Antigravityアプリ
 
 # src/settings_window/providers.rs
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 # src/settings_window/providers.rs
 kiro-ide = Kiro IDE
@@ -2186,6 +2201,9 @@ folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = agy.exe、ag
 
 # application
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = grok.exe、grok.cmd、または grok.ps1 のフォルダー。自動的に検索されるようにするには、空のままにします。
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = cmdc.cmd または cmdc.ps1 のフォルダー。自動的に検索されるようにするには、空のままにします。
 
 # application
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Kiro.exe を含むフォルダー、または実行可能ファイル自体。自動的に検索されるようにするには、空のままにします。

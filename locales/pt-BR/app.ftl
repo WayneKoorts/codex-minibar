@@ -821,6 +821,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = Encontrado um login oficial da C
 
 not-found-run-grok-login-before-enabling-it = Não encontrado. Execute grok login antes de ativar.
 
+# src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = Encontrado um login oficial da CLI do Command Code neste PC.
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = Não encontrado. Execute cmdc login antes de ativar.
+
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Encontrado Kiro IDE, Kiro Crew ou uma CLI do Kiro conectada.
 
 not-found-install-kiro-ide-or-kiro-crew-or-sign-in-to-kiro-cli = Não encontrado. Instale Kiro IDE ou Kiro Crew, ou entre na CLI do Kiro.
@@ -1239,6 +1245,9 @@ cursor-app-folder = Pasta do aplicativo Cursor
 
 grok-cli-folder = Pasta da CLI do Grok
 
+# src/settings_window/providers.rs
+command-code-cli-folder = Pasta da CLI do Command Code
+
 kiro-ide-folder = Pasta do Kiro IDE
 
 kiro-crew-app-path = Caminho do aplicativo Kiro Crew
@@ -1261,6 +1270,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = Lê a cota da
 
 reads-supergrok-subscription-credits-from-your-existing-official = Lê os créditos da assinatura SuperGrok a partir do seu login oficial existente da CLI do Grok.
 
+# src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = Lê os créditos de 5 horas, semanais e mensais do Command Code a partir do seu login oficial existente da CLI.
+
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = Obtém os créditos mensais atuais do Kiro com seu login compartilhado; reconhece instalações do IDE, Crew e CLI.
 
 codex-desktop-app = Aplicativo desktop do Codex
@@ -1276,6 +1288,9 @@ cursor-app = Aplicativo Cursor
 antigravity-app = Aplicativo Antigravity
 
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 kiro-ide = Kiro IDE
 
@@ -1498,6 +1513,9 @@ folder-with-cursor-exe-leave-empty-to-find-it-automatically-usage = Pasta com Cu
 folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = Pasta com agy.exe, agy.cmd ou agy.ps1. Deixe em branco para encontrar automaticamente.
 
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = Pasta com grok.exe, grok.cmd ou grok.ps1. Deixe em branco para encontrar automaticamente.
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = Pasta com cmdc.cmd ou cmdc.ps1. Deixe em branco para encontrar automaticamente.
 
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Pasta com Kiro.exe ou o próprio executável. Deixe em branco para encontrar automaticamente.
 

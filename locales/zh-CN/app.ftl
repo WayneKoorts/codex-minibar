@@ -818,6 +818,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = 已在此电脑找到官方 Grok
 
 not-found-run-grok-login-before-enabling-it = 未找到。请先运行 grok login 再启用。
 
+# src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = 已在此电脑找到官方 Command Code CLI 登录信息。
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = 未找到。请先运行 cmdc login 再启用。
+
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = 已找到 Kiro IDE、Kiro Crew 或已登录的 Kiro CLI。
 
 not-found-install-kiro-ide-or-kiro-crew-or-sign-in-to-kiro-cli = 未找到。请安装 Kiro IDE 或 Kiro Crew，或登录 Kiro CLI。
@@ -1236,6 +1242,9 @@ cursor-app-folder = Cursor 应用文件夹
 
 grok-cli-folder = Grok CLI 文件夹
 
+# src/settings_window/providers.rs
+command-code-cli-folder = Command Code CLI 文件夹
+
 kiro-ide-folder = Kiro IDE 文件夹
 
 kiro-crew-app-path = Kiro Crew 应用路径
@@ -1258,6 +1267,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = 通过现有�
 
 reads-supergrok-subscription-credits-from-your-existing-official = 通过现有的官方 Grok CLI 登录读取 SuperGrok 订阅积分。
 
+# src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = 通过现有的官方 CLI 登录读取 Command Code 的 5 小时、每周和每月积分。
+
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = 通过 Kiro 共享登录获取实时每月积分；可识别 IDE、Crew 和 CLI 安装。
 
 codex-desktop-app = Codex 桌面应用
@@ -1273,6 +1285,9 @@ cursor-app = Cursor 应用
 antigravity-app = Antigravity 应用
 
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 kiro-ide = Kiro IDE
 
@@ -1480,6 +1495,9 @@ folder-with-cursor-exe-leave-empty-to-find-it-automatically-usage = 包含 Curso
 folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = 包含 agy.exe、agy.cmd 或 agy.ps1 的文件夹。留空以自动查找。
 
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = 包含 grok.exe、grok.cmd 或 grok.ps1 的文件夹。留空以自动查找。
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = 包含 cmdc.cmd 或 cmdc.ps1 的文件夹。留空以自动查找。
 
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = 包含 Kiro.exe 的文件夹或可执行文件本身。留空以自动查找。
 

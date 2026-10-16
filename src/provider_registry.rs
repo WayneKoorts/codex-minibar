@@ -189,6 +189,27 @@ const KIRO_METRICS: &[MetricDescriptor] = &[MetricDescriptor {
     source: MetricSource::Secondary,
 }];
 
+const COMMAND_CODE_METRICS: &[MetricDescriptor] = &[
+    MetricDescriptor {
+        id: "command-code.session",
+        label: "5h session",
+        label_key: "msg-5h-session",
+        source: MetricSource::Primary,
+    },
+    MetricDescriptor {
+        id: "command-code.weekly",
+        label: "Weekly",
+        label_key: "weekly",
+        source: MetricSource::Secondary,
+    },
+    MetricDescriptor {
+        id: "command-code.monthly",
+        label: "Monthly",
+        label_key: "monthly",
+        source: MetricSource::Additional(crate::commandcode::MONTHLY_LIMIT_ID),
+    },
+];
+
 pub const PROVIDERS: &[ProviderDescriptor] = &[
     ProviderDescriptor {
         kind: ProviderKind::Codex,
@@ -302,6 +323,18 @@ pub const PROVIDERS: &[ProviderDescriptor] = &[
         metrics: KIRO_METRICS,
         default_tray_metrics: &["kiro.additional.credits"],
     },
+    ProviderDescriptor {
+        kind: ProviderKind::CommandCode,
+        id: "command-code",
+        display_name: "Command Code",
+        icon: "commandcode",
+        brand_rgb: (92, 92, 92),
+        supports_activation: false,
+        include_in_total_spend: false,
+        supports_multiple_instances: false,
+        metrics: COMMAND_CODE_METRICS,
+        default_tray_metrics: &["command-code.session", "command-code.weekly"],
+    },
 ];
 
 pub fn descriptor(provider: ProviderKind) -> &'static ProviderDescriptor {
@@ -344,6 +377,7 @@ pub fn light_surface_brand_rgb(provider: ProviderKind) -> (u8, u8, u8) {
         ProviderKind::Antigravity => (32, 96, 205),
         ProviderKind::Grok => (51, 51, 51),
         ProviderKind::Kiro => (105, 78, 198),
+        ProviderKind::CommandCode => (51, 51, 51),
     }
 }
 
@@ -353,7 +387,7 @@ pub fn light_surface_brand_rgb(provider: ProviderKind) -> (u8, u8, u8) {
 /// on light cards via [`light_surface_brand_rgb`].
 pub fn dark_surface_brand_rgb(provider: ProviderKind) -> (u8, u8, u8) {
     match provider {
-        ProviderKind::Cursor | ProviderKind::Grok => (255, 255, 255),
+        ProviderKind::Cursor | ProviderKind::Grok | ProviderKind::CommandCode => (255, 255, 255),
         _ => descriptor(provider).brand_rgb,
     }
 }
@@ -408,6 +442,7 @@ pub fn supports_banked_resets(provider: ProviderKind) -> bool {
             | ProviderKind::Antigravity
             | ProviderKind::Grok
             | ProviderKind::Kiro
+            | ProviderKind::CommandCode
     )
 }
 
@@ -426,7 +461,10 @@ pub fn supports_credits(provider: ProviderKind) -> bool {
 pub fn supports_usage_stats(provider: ProviderKind) -> bool {
     !matches!(
         provider,
-        ProviderKind::Antigravity | ProviderKind::Grok | ProviderKind::Kiro
+        ProviderKind::Antigravity
+            | ProviderKind::Grok
+            | ProviderKind::Kiro
+            | ProviderKind::CommandCode
     )
 }
 

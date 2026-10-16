@@ -304,6 +304,19 @@ fn start_driver_worker(
             };
             start_worker!(client(), client(), crate::kiro::KiroActivator, false)
         }
+        ProviderKind::CommandCode => {
+            if let Some(executable) =
+                crate::commandcode::cli_available(instance.binary_path.as_deref())
+            {
+                crate::logger::info(format!("Command Code launcher: {}", executable.display()));
+            }
+            start_worker!(
+                crate::commandcode::CommandCodeClient::new(),
+                crate::commandcode::CommandCodeClient::new(),
+                crate::commandcode::CommandCodeActivator,
+                false
+            )
+        }
     })
 }
 
@@ -397,6 +410,7 @@ fn provider_activation_path(provider: ProviderId, base_path: PathBuf) -> PathBuf
         ProviderKind::Antigravity => base_path.with_file_name("activation-antigravity.toml"),
         ProviderKind::Grok => base_path.with_file_name("activation-grok.toml"),
         ProviderKind::Kiro => base_path.with_file_name("activation-kiro.toml"),
+        ProviderKind::CommandCode => base_path.with_file_name("activation-command-code.toml"),
     }
 }
 

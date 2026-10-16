@@ -41,9 +41,9 @@ Codex Minibar reads quota data from locally authenticated provider sessions and 
 
 Click the tray icon for a native popup with the current plan, five-hour and weekly windows,
 credits, reset countdowns and usage pace of every enabled provider: Codex, Claude, Cursor,
-OpenCode Zen, OpenCode Go, OpenRouter, Antigravity, Grok, and Kiro. Providers are enabled
-independently in **Settings → Providers** and refresh independently. Antigravity, Grok and
-Kiro show subscription quota rather than unrelated API billing.
+OpenCode Zen, OpenCode Go, OpenRouter, Antigravity, Grok, Kiro, and Command Code. Providers are
+enabled independently in **Settings → Providers** and refresh independently. Antigravity, Grok,
+Kiro and Command Code show subscription quota rather than unrelated API billing.
 
 ### Several accounts and your own Home
 
@@ -119,6 +119,7 @@ See spending per key and manage OpenRouter API keys from the popup's OpenRouter 
   on weekends.
 - Usage pace indicators show whether you are burning a window faster than it resets.
 - Kiro's monthly included credits and reset date, and Claude cloud-session credit balances.
+- Command Code's five-hour, weekly and monthly credit windows, plus any purchased top-up balance.
 - Warnings before a Claude login stops renewing.
 - An optional Stream Deck companion with quota keys that open the popup or a provider tab and
   launch Minibar when it is not running.
@@ -155,6 +156,10 @@ then its email address, and follows the **Show account name** preference. Redact
 For Antigravity, run `agy` and complete its normal sign-in once; Minibar reads that existing
 Windows Credential Manager session and never stores it in app settings. For Grok, run `grok login`;
 Minibar reads the official CLI auth cache. If either session expires, refresh it in the official CLI.
+For Command Code, run `cmdc login`; Minibar reads the API key the CLI stores in
+`~/.commandcode/auth.json` and only calls the CLI's own read-only billing endpoints. The monthly
+row is sized from the reported grant or the plan's published allowance, so an unrecognized plan
+shows only the rolling windows.
 Browser-session access is not used.
 
 ### Add another Codex account

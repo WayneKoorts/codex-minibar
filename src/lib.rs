@@ -5,6 +5,7 @@ pub mod claude;
 pub mod claude_desktop;
 pub mod cmdpal;
 pub mod codex;
+pub mod commandcode;
 pub mod cursor;
 pub mod discovery;
 pub mod game_mode;

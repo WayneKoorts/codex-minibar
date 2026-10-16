@@ -1202,6 +1202,12 @@ found-an-official-grok-cli-sign-in-on-this-pc = Auf diesem PC wurde eine offizie
 not-found-run-grok-login-before-enabling-it = Nicht gefunden. Führen Sie grok login aus, bevor Sie es aktivieren.
 
 # src/settings_window/onboarding.rs
+found-an-official-command-code-cli-sign-in-on-this-pc = Auf diesem PC wurde eine offizielle Command Code CLI-Anmeldung gefunden.
+
+# src/settings_window/onboarding.rs
+not-found-run-cmdc-login-before-enabling-it = Nicht gefunden. Führen Sie cmdc login aus, bevor Sie es aktivieren.
+
+# src/settings_window/onboarding.rs
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Gefunden: Kiro IDE, Kiro Crew oder ein angemeldeter Kiro CLI.
 
 # src/settings_window/onboarding.rs
@@ -1828,6 +1834,9 @@ cursor-app-folder = Cursor App-Ordner
 grok-cli-folder = Ordner Grok CLI
 
 # src/settings_window/providers.rs
+command-code-cli-folder = Ordner Command Code CLI
+
+# src/settings_window/providers.rs
 kiro-ide-folder = Ordner Kiro IDE
 
 # src/settings_window/providers.rs
@@ -1861,6 +1870,9 @@ reads-subscription-quota-from-your-existing-official-agy-windows = Liest das Abo
 reads-supergrok-subscription-credits-from-your-existing-official = Liest SuperGrok-Abonnementguthaben aus Ihrer bestehenden offiziellen Grok CLI-Anmeldung.
 
 # src/settings_window/providers.rs
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = Liest 5-Stunden-, Wochen- und Monatsguthaben von Command Code aus Ihrer bestehenden offiziellen CLI-Anmeldung.
+
+# src/settings_window/providers.rs
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = Ruft die monatlichen Live-Credits von Kiro mit der gemeinsamen Anmeldung ab; erkennt IDE-, Crew- und CLI-Installationen.
 
 # src/settings_window/providers.rs
@@ -1883,6 +1895,9 @@ antigravity-app = Antigravity-App
 
 # src/settings_window/providers.rs
 grok-cli = Grok CLI
+
+# src/settings_window/providers.rs
+command-code-cli = Command Code CLI
 
 # src/settings_window/providers.rs
 kiro-ide = Kiro IDE
@@ -2204,6 +2219,9 @@ folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = Ordner mit a
 
 # application
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = Ordner mit grok.exe, grok.cmd oder grok.ps1. Lassen Sie das Feld leer, damit es automatisch gefunden wird.
+
+# src/settings_window/providers.rs
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = Ordner mit cmdc.cmd oder cmdc.ps1. Lassen Sie das Feld leer, damit es automatisch gefunden wird.
 
 # application
 folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Ordner, der Kiro.exe oder die ausführbare Datei selbst enthält. Lassen Sie das Feld leer, damit es automatisch gefunden wird.

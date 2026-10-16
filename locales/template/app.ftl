@@ -1728,6 +1728,14 @@ found-an-official-grok-cli-sign-in-on-this-pc = { "" }
 not-found-run-grok-login-before-enabling-it = { "" }
 
 # English source:
+# found-an-official-command-code-cli-sign-in-on-this-pc = Found an official Command Code CLI sign-in on this PC.
+found-an-official-command-code-cli-sign-in-on-this-pc = { "" }
+
+# English source:
+# not-found-run-cmdc-login-before-enabling-it = Not found. Run cmdc login before enabling it.
+not-found-run-cmdc-login-before-enabling-it = { "" }
+
+# English source:
 # found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = Found Kiro IDE, Kiro Crew, or a signed-in Kiro CLI.
 found-kiro-ide-kiro-crew-or-a-signed-in-kiro-cli = { "" }
 
@@ -2568,6 +2576,10 @@ cursor-app-folder = { "" }
 grok-cli-folder = { "" }
 
 # English source:
+# command-code-cli-folder = Command Code CLI folder
+command-code-cli-folder = { "" }
+
+# English source:
 # kiro-ide-folder = Kiro IDE folder
 kiro-ide-folder = { "" }
 
@@ -2612,6 +2624,10 @@ reads-subscription-quota-from-your-existing-official-agy-windows = { "" }
 reads-supergrok-subscription-credits-from-your-existing-official = { "" }
 
 # English source:
+# reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = Reads Command Code 5-hour, weekly, and monthly credits from your existing official CLI sign-in.
+reads-command-code-5h-weekly-and-monthly-credits-from-your-existin = { "" }
+
+# English source:
 # fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = Fetches Kiro's live monthly credits with its shared sign-in; recognizes IDE, Crew, and CLI installs.
 fetches-kiro-s-live-monthly-credits-with-its-shared-sign-in-recog = { "" }
 
@@ -2642,6 +2658,10 @@ antigravity-app = { "" }
 # English source:
 # grok-cli = Grok CLI
 grok-cli = { "" }
+
+# English source:
+# command-code-cli = Command Code CLI
+command-code-cli = { "" }
 
 # English source:
 # kiro-ide = Kiro IDE
@@ -3065,6 +3085,10 @@ folder-with-agy-exe-agy-cmd-or-agy-ps1-leave-empty-to-find-it-aut = { "" }
 # English source:
 # folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = Folder with grok.exe, grok.cmd, or grok.ps1. Leave empty to find it automatically.
 folder-with-grok-exe-grok-cmd-or-grok-ps1-leave-empty-to-find-it = { "" }
+
+# English source:
+# folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = Folder with cmdc.cmd or cmdc.ps1. Leave empty to find it automatically.
+folder-with-cmdc-cmd-or-cmdc-ps1-leave-empty-to-find-it-automati = { "" }
 
 # English source:
 # folder-containing-kiro-exe-or-the-executable-itself-leave-empty-t = Folder containing Kiro.exe, or the executable itself. Leave empty to find it automatically.

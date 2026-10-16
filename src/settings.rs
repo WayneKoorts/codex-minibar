@@ -723,6 +723,7 @@ pub enum ProviderKind {
     Antigravity,
     Grok,
     Kiro,
+    CommandCode,
 }
 
 /// When the app backs off to leave CPU, GPU and network to a game.
@@ -898,7 +899,7 @@ fn new_id(prefix: &str) -> String {
 }
 
 impl ProviderKind {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Codex,
         Self::Claude,
         Self::Cursor,
@@ -908,6 +909,7 @@ impl ProviderKind {
         Self::Antigravity,
         Self::Grok,
         Self::Kiro,
+        Self::CommandCode,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -921,6 +923,7 @@ impl ProviderKind {
             Self::Antigravity => "antigravity",
             Self::Grok => "grok",
             Self::Kiro => "kiro",
+            Self::CommandCode => "command-code",
         }
     }
 
@@ -935,6 +938,7 @@ impl ProviderKind {
             "antigravity" => Some(Self::Antigravity),
             "grok" => Some(Self::Grok),
             "kiro" => Some(Self::Kiro),
+            "command-code" => Some(Self::CommandCode),
             _ => None,
         }
     }
@@ -950,6 +954,7 @@ impl ProviderKind {
             Self::Antigravity => "Antigravity",
             Self::Grok => "Grok",
             Self::Kiro => "Kiro",
+            Self::CommandCode => "Command Code",
         }
     }
 
