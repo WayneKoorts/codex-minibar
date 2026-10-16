@@ -159,7 +159,9 @@ Minibar reads the official CLI auth cache. If either session expires, refresh it
 For Command Code, run `cmdc login`; Minibar reads the API key the CLI stores in
 `~/.commandcode/auth.json` and only calls the CLI's own read-only billing endpoints. The monthly
 row is sized from the reported grant or the plan's published allowance, so an unrecognized plan
-shows only the rolling windows.
+shows only the rolling windows. Usage statistics come from the CLI's local session logs in
+`~/.commandcode/projects`, using the credit cost the CLI recorded for each response; transcripts
+written by CLI versions that did not record token usage contribute nothing.
 Browser-session access is not used.
 
 ### Add another Codex account

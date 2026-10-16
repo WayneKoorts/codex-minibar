@@ -5,23 +5,30 @@
 //! CLI's own `/alpha/billing/*` routes accept it as a bearer token: `credits`
 //! reports the 5-hour and weekly USD windows plus the remaining monthly grant,
 //! and `subscriptions` names the plan that sizes that grant.
+//!
+//! Usage statistics come only from the CLI's local session logs in
+//! `~/.commandcode/projects`, where each model response records its tokens
+//! and the credit cost the CLI charged for it.
 
 use std::{
-    fs,
+    collections::{BTreeMap, HashMap, HashSet},
+    fs::{self, File},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     thread,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use anyhow::{Context, Result, bail};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Local, NaiveDate, TimeZone, Utc};
 use directories::BaseDirs;
 use serde_json::Value;
 
 use crate::{
+    instances::ProviderId,
     limits::{AdditionalLimit, Credits, LimitWindow, RateLimits, UsageAmount},
-    provider_cli,
-    usage::UsageStatistics,
+    provider_cli, store,
+    usage::{DailyTokenUsage, TokenUsage, UsageStatistics, statistics_from_daily},
     worker::{Activator, LimitProvider, UsageProvider},
 };
 
@@ -44,6 +51,8 @@ const CLI_NAMES: &[&str] = &[
     "commandcode.ps1",
 ];
 pub(crate) const MONTHLY_LIMIT_ID: &str = "monthly";
+const LOCAL_HISTORY_DAYS: i64 = 365;
+const HOURLY_HISTORY_HOURS: i64 = 48;
 
 /// Monthly USD allowance per subscription plan, from
 /// https://commandcode.ai/pricing. The credits response reports only the
@@ -60,14 +69,19 @@ const PLANS: &[(&str, &str, f64)] = &[
 
 pub struct CommandCodeClient {
     agent: ureq::Agent,
+    provider: ProviderId,
+    /// Parsed session logs keyed by path, reused while a file is unchanged.
+    sessions: HashMap<PathBuf, SessionLog>,
 }
 
 pub struct CommandCodeActivator;
 
 impl CommandCodeClient {
-    pub fn new() -> Self {
+    pub fn new(provider: ProviderId) -> Self {
         Self {
             agent: ureq::AgentBuilder::new().timeout(REQUEST_TIMEOUT).build(),
+            provider,
+            sessions: HashMap::new(),
         }
     }
 
@@ -97,12 +111,6 @@ impl CommandCodeClient {
         response
             .into_string()
             .context("read Command Code billing response")
-    }
-}
-
-impl Default for CommandCodeClient {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -139,13 +147,29 @@ impl LimitProvider for CommandCodeClient {
 }
 
 impl UsageProvider for CommandCodeClient {
-    fn load_cached_usage_statistics(&mut self, _history_days: u16) -> Result<UsageStatistics> {
-        Ok(UsageStatistics::default())
+    fn load_cached_usage_statistics(&mut self, history_days: u16) -> Result<UsageStatistics> {
+        store::with_store(|store| store.load_usage_daily(self.provider, history_days))
     }
 
-    fn refresh_usage_statistics(&mut self, _history_days: u16) -> Result<UsageStatistics> {
-        // Subscription credits are quota, not API billing or local token spend.
-        Ok(UsageStatistics::default())
+    fn refresh_usage_statistics(&mut self, history_days: u16) -> Result<UsageStatistics> {
+        // A retiring worker's scan can still be running when its replacement
+        // starts; serialize them so their store writes cannot interleave.
+        static SCAN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _scan = SCAN
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Command Code scan lock poisoned"))?;
+        let Some(root) = projects_root() else {
+            bail!("Command Code home directory is unavailable")
+        };
+        refresh_sessions(&mut self.sessions, &session_files(&root));
+        let rollup = rollup(&self.sessions, Utc::now());
+        store::with_store(|store| {
+            store.replace_usage_daily(self.provider, &rollup.daily)?;
+            store.replace_usage_hourly(self.provider, &rollup.hourly)?;
+            store.replace_usage_model_daily(self.provider, &rollup.models)?;
+            store.replace_usage_project_daily(self.provider, &rollup.projects)
+        })?;
+        Ok(statistics_from_daily(&rollup.daily, history_days))
     }
 }
 
@@ -416,6 +440,249 @@ fn timestamp(value: Option<&Value>) -> Option<DateTime<Utc>> {
     Utc.timestamp_millis_opt(millis as i64).single()
 }
 
+// ----- local usage -----------------------------------------------------------
+
+fn projects_root() -> Option<PathBuf> {
+    BaseDirs::new().map(|dirs| dirs.home_dir().join(".commandcode/projects"))
+}
+
+/// Session transcripts, one folder per project. Checkpoint journals share the
+/// `.jsonl` extension but record file snapshots, not model responses.
+fn session_files(root: &Path) -> Vec<PathBuf> {
+    let Ok(projects) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut files = projects
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter_map(|project| fs::read_dir(project).ok())
+        .flat_map(|entries| entries.flatten().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    name.ends_with(".jsonl") && !name.ends_with(".checkpoints.jsonl")
+                })
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files
+}
+
+#[derive(Debug, Default, PartialEq)]
+struct SessionLog {
+    len: u64,
+    modified: Option<SystemTime>,
+    /// Working directory from the transcript's `session` header, if any.
+    cwd: Option<String>,
+    records: Vec<UsageRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct UsageRecord {
+    id: Option<String>,
+    timestamp: DateTime<Utc>,
+    model: String,
+    usage: TokenUsage,
+}
+
+/// Re-reads only logs whose size or modification time changed, and forgets
+/// logs the CLI has deleted.
+fn refresh_sessions(sessions: &mut HashMap<PathBuf, SessionLog>, files: &[PathBuf]) {
+    let known = files.iter().collect::<HashSet<_>>();
+    sessions.retain(|path, _| known.contains(path));
+    for path in files {
+        let Ok(metadata) = fs::metadata(path) else {
+            sessions.remove(path);
+            continue;
+        };
+        let modified = metadata.modified().ok();
+        if sessions
+            .get(path)
+            .is_some_and(|log| log.len == metadata.len() && log.modified == modified)
+        {
+            continue;
+        }
+        match read_session(path) {
+            Ok((cwd, records)) => {
+                sessions.insert(
+                    path.clone(),
+                    SessionLog {
+                        len: metadata.len(),
+                        modified,
+                        cwd,
+                        records,
+                    },
+                );
+            }
+            Err(error) => {
+                crate::logger::info(format!(
+                    "Command Code session log {} was skipped: {error:#}",
+                    path.display()
+                ));
+            }
+        }
+    }
+}
+
+fn read_session(path: &Path) -> Result<(Option<String>, Vec<UsageRecord>)> {
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut cwd = None;
+    let mut records = Vec::new();
+    for line in BufReader::new(file).lines() {
+        let line = line.with_context(|| format!("read {}", path.display()))?;
+        // Tool outputs dominate transcripts; skip them before parsing JSON.
+        let header = cwd.is_none() && line.contains("\"cwd\"");
+        if !header && !line.contains("\"usage\"") {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if header
+            && value.get("type").and_then(Value::as_str) == Some("session")
+            && let Some(dir) = value.get("cwd").and_then(Value::as_str)
+            && !dir.trim().is_empty()
+        {
+            cwd = Some(dir.to_owned());
+        }
+        if let Some(record) = usage_record(&value) {
+            records.push(record);
+        }
+    }
+    Ok((cwd, records))
+}
+
+/// One model response. `inputTokens` already includes cache reads, matching
+/// the convention that `cached_input_tokens` is a subset of `input_tokens`.
+fn usage_record(value: &Value) -> Option<UsageRecord> {
+    let usage = value.get("usage").filter(|usage| usage.is_object())?;
+    let timestamp = value
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .and_then(|text| DateTime::parse_from_rfc3339(text).ok())?
+        .with_timezone(&Utc);
+    let tokens = |key| {
+        number(usage.get(key))
+            .filter(|value| *value > 0.0)
+            .map_or(0, |value| value.round() as u64)
+    };
+    let input = tokens("inputTokens");
+    let output = tokens("outputTokens");
+    let cost = number(usage.get("costUsd")).filter(|cost| *cost >= 0.0);
+    if input == 0 && output == 0 && cost.is_none_or(|cost| cost == 0.0) {
+        return None;
+    }
+    Some(UsageRecord {
+        id: value
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned),
+        timestamp,
+        model: value
+            .get("model")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+            .unwrap_or("unknown")
+            .to_owned(),
+        usage: TokenUsage {
+            input_tokens: input,
+            cached_input_tokens: tokens("cacheReadTokens").min(input),
+            output_tokens: output,
+            requests: 1,
+            estimated_cost_microusd: cost.map_or(0, |cost| (cost * 1_000_000.0).round() as u64),
+            priced_requests: u64::from(cost.is_some()),
+            ..TokenUsage::default()
+        },
+    })
+}
+
+#[derive(Debug, Default)]
+struct UsageRollup {
+    daily: Vec<DailyTokenUsage>,
+    hourly: Vec<(DateTime<Local>, TokenUsage)>,
+    models: Vec<(String, NaiveDate, TokenUsage)>,
+    projects: Vec<(String, NaiveDate, TokenUsage)>,
+}
+
+fn rollup(sessions: &HashMap<PathBuf, SessionLog>, now: DateTime<Utc>) -> UsageRollup {
+    let oldest = now - chrono::Duration::days(LOCAL_HISTORY_DAYS);
+    let hourly_since = now - chrono::Duration::hours(HOURLY_HISTORY_HOURS);
+    // A log without its own `session` header shares its siblings' project.
+    let folder = |path: &Path| {
+        path.parent()
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+    let mut paths = sessions.keys().collect::<Vec<_>>();
+    paths.sort();
+    let mut folder_cwd = HashMap::<String, &str>::new();
+    for path in &paths {
+        if let Some(cwd) = sessions[*path].cwd.as_deref() {
+            folder_cwd.entry(folder(path)).or_insert(cwd);
+        }
+    }
+    let mut seen = HashSet::new();
+    let mut daily = BTreeMap::<NaiveDate, TokenUsage>::new();
+    let mut hourly = BTreeMap::<DateTime<Local>, TokenUsage>::new();
+    let mut models = BTreeMap::<(String, NaiveDate), TokenUsage>::new();
+    let mut projects = BTreeMap::<(String, NaiveDate), TokenUsage>::new();
+    for path in paths {
+        let log = &sessions[path];
+        let project = log
+            .cwd
+            .clone()
+            .or_else(|| folder_cwd.get(&folder(path)).map(|cwd| (*cwd).to_owned()))
+            .unwrap_or_else(|| folder(path));
+        for record in &log.records {
+            if record.timestamp < oldest {
+                continue;
+            }
+            // A resumed or forked session can copy earlier responses.
+            if let Some(id) = &record.id
+                && !seen.insert((id.as_str(), record.timestamp))
+            {
+                continue;
+            }
+            let local = record.timestamp.with_timezone(&Local);
+            let date = local.date_naive();
+            daily.entry(date).or_default().add(&record.usage);
+            models
+                .entry((record.model.clone(), date))
+                .or_default()
+                .add(&record.usage);
+            projects
+                .entry((project.clone(), date))
+                .or_default()
+                .add(&record.usage);
+            if record.timestamp >= hourly_since {
+                hourly
+                    .entry(crate::usage::truncate_local_hour(local))
+                    .or_default()
+                    .add(&record.usage);
+            }
+        }
+    }
+    let keyed = |rows: BTreeMap<(String, NaiveDate), TokenUsage>| {
+        rows.into_iter()
+            .map(|((key, date), usage)| (key, date, usage))
+            .collect()
+    };
+    UsageRollup {
+        daily: daily
+            .into_iter()
+            .map(|(date, usage)| DailyTokenUsage { date, usage })
+            .collect(),
+        hourly: hourly.into_iter().collect(),
+        models: keyed(models),
+        projects: keyed(projects),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -530,5 +797,117 @@ mod tests {
             cli_available(Some(directory.path())),
             Some(fs::canonicalize(launcher).unwrap())
         );
+    }
+
+    fn transcript(lines: &[&str]) -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("c-dev-app");
+        fs::create_dir(&project).unwrap();
+        fs::write(project.join("a.jsonl"), lines.join("\n")).unwrap();
+        // Checkpoint journals are not transcripts and must never be counted.
+        fs::write(
+            project.join("a.checkpoints.jsonl"),
+            r#"{"usage":{"inputTokens":999,"costUsd":9},"timestamp":"2026-10-16T16:00:00Z"}"#,
+        )
+        .unwrap();
+        root
+    }
+
+    const SESSION: &str = r#"{"type":"session","version":3,"id":"s","timestamp":"2026-10-16T16:00:00Z","cwd":"C:\\Dev\\app"}"#;
+    const RESPONSE: &str = r#"{"type":"message","id":"4e685697","timestamp":"2026-10-16T16:49:52.698Z","message":{"role":"assistant","content":[]},"model":"deepseek/deepseek-v4.1-flash-fast","usage":{"inputTokens":21923,"outputTokens":341,"cacheReadTokens":6144,"cacheWriteTokens":0,"costUsd":0.002820724}}"#;
+
+    #[test]
+    fn reads_model_responses_with_their_cost_and_project() {
+        let root = transcript(&[
+            SESSION,
+            r#"{"role":"tool","content":[{"type":"tool-result","output":{"value":"no usage here"}}]}"#,
+            RESPONSE,
+        ]);
+        let files = session_files(root.path());
+        assert_eq!(files.len(), 1);
+        let mut sessions = HashMap::new();
+        refresh_sessions(&mut sessions, &files);
+        let log = &sessions[&files[0]];
+        assert_eq!(log.cwd.as_deref(), Some(r"C:\Dev\app"));
+        assert_eq!(log.records.len(), 1);
+        let record = &log.records[0];
+        assert_eq!(record.model, "deepseek/deepseek-v4.1-flash-fast");
+        assert_eq!(record.usage.input_tokens, 21_923);
+        assert_eq!(record.usage.cached_input_tokens, 6_144);
+        assert_eq!(record.usage.output_tokens, 341);
+        assert_eq!(record.usage.estimated_cost_microusd, 2_821);
+        assert_eq!(record.usage.priced_requests, 1);
+
+        let now = DateTime::parse_from_rfc3339("2026-10-16T18:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let rollup = rollup(&sessions, now);
+        assert_eq!(rollup.daily.len(), 1);
+        assert_eq!(rollup.daily[0].usage.requests, 1);
+        assert_eq!(rollup.hourly.len(), 1);
+        assert_eq!(rollup.models[0].0, "deepseek/deepseek-v4.1-flash-fast");
+        assert_eq!(rollup.projects[0].0, r"C:\Dev\app");
+    }
+
+    #[test]
+    fn copied_responses_count_once_and_headerless_logs_borrow_the_project() {
+        let root = transcript(&[SESSION, RESPONSE]);
+        // A resumed session without its own header repeats the response.
+        fs::write(root.path().join("c-dev-app/b.jsonl"), RESPONSE).unwrap();
+        let other = root.path().join("c-dev-other");
+        fs::create_dir(&other).unwrap();
+        fs::write(
+            other.join("c.jsonl"),
+            RESPONSE.replace("4e685697", "77777777"),
+        )
+        .unwrap();
+
+        let mut sessions = HashMap::new();
+        refresh_sessions(&mut sessions, &session_files(root.path()));
+        let now = DateTime::parse_from_rfc3339("2026-10-16T18:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let rollup = rollup(&sessions, now);
+        assert_eq!(rollup.daily[0].usage.requests, 2);
+        let projects = rollup
+            .projects
+            .iter()
+            .map(|(project, _, usage)| (project.as_str(), usage.requests))
+            .collect::<Vec<_>>();
+        assert_eq!(projects, [(r"C:\Dev\app", 1), ("c-dev-other", 1)]);
+    }
+
+    #[test]
+    fn unchanged_logs_are_not_reread_and_deleted_logs_are_forgotten() {
+        let root = transcript(&[SESSION, RESPONSE]);
+        let files = session_files(root.path());
+        let mut sessions = HashMap::new();
+        refresh_sessions(&mut sessions, &files);
+        // A cached entry that disagrees with the file proves it was reused.
+        sessions.get_mut(&files[0]).unwrap().records.clear();
+        refresh_sessions(&mut sessions, &files);
+        assert!(sessions[&files[0]].records.is_empty());
+
+        refresh_sessions(&mut sessions, &[]);
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn ignores_lines_without_usable_usage() {
+        let value = |raw: &str| serde_json::from_str::<Value>(raw).unwrap();
+        assert!(usage_record(&value(r#"{"usage":{"inputTokens":5}}"#)).is_none());
+        assert!(
+            usage_record(&value(
+                r#"{"timestamp":"2026-10-16T16:00:00Z","usage":{"inputTokens":0,"outputTokens":0}}"#
+            ))
+            .is_none()
+        );
+        let unpriced = usage_record(&value(
+            r#"{"timestamp":"2026-10-16T16:00:00Z","usage":{"inputTokens":5,"cacheReadTokens":9}}"#,
+        ))
+        .unwrap();
+        assert_eq!(unpriced.model, "unknown");
+        assert_eq!(unpriced.usage.cached_input_tokens, 5);
+        assert_eq!(unpriced.usage.priced_requests, 0);
     }
 }

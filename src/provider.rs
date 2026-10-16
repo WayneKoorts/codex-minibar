@@ -311,8 +311,8 @@ fn start_driver_worker(
                 crate::logger::info(format!("Command Code launcher: {}", executable.display()));
             }
             start_worker!(
-                crate::commandcode::CommandCodeClient::new(),
-                crate::commandcode::CommandCodeClient::new(),
+                crate::commandcode::CommandCodeClient::new(provider),
+                crate::commandcode::CommandCodeClient::new(provider),
                 crate::commandcode::CommandCodeActivator,
                 false
             )

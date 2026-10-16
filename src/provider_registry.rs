@@ -330,7 +330,7 @@ pub const PROVIDERS: &[ProviderDescriptor] = &[
         icon: "commandcode",
         brand_rgb: (92, 92, 92),
         supports_activation: false,
-        include_in_total_spend: false,
+        include_in_total_spend: true,
         supports_multiple_instances: false,
         metrics: COMMAND_CODE_METRICS,
         default_tray_metrics: &["command-code.session", "command-code.weekly"],
@@ -461,10 +461,7 @@ pub fn supports_credits(provider: ProviderKind) -> bool {
 pub fn supports_usage_stats(provider: ProviderKind) -> bool {
     !matches!(
         provider,
-        ProviderKind::Antigravity
-            | ProviderKind::Grok
-            | ProviderKind::Kiro
-            | ProviderKind::CommandCode
+        ProviderKind::Antigravity | ProviderKind::Grok | ProviderKind::Kiro
     )
 }
 

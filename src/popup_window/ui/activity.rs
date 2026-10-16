@@ -1477,7 +1477,7 @@ fn grow(element: gpui::Div, weight: f32) -> gpui::Div {
 pub(crate) fn is_cost_provider(provider: ProviderKind) -> bool {
     matches!(
         provider,
-        ProviderKind::OpenCodeZen | ProviderKind::OpenCodeGo
+        ProviderKind::OpenCodeZen | ProviderKind::OpenCodeGo | ProviderKind::CommandCode
     )
 }
 
