@@ -15,6 +15,7 @@ pub const SETTINGS_VERSION: u32 = 41;
 const TASKBAR_DEFAULT_VERSION: u32 = 41;
 
 mod migration;
+pub(crate) mod unknown;
 
 pub use crate::instances::{BadgeColor, InstanceSource, ProviderId, ProviderInstance};
 
@@ -2198,6 +2199,10 @@ pub struct Settings {
     pub game_mode_games: Vec<String>,
     /// Executables Automatic game mode never treats as games.
     pub game_mode_ignored: Vec<String>,
+    /// Entries a newer build wrote that this build cannot decode. They are
+    /// skipped while running and written back on save.
+    #[serde(skip)]
+    pub(crate) unknown_entries: unknown::UnknownEntries,
 }
 
 fn default_show_usage_values() -> bool {
@@ -2264,6 +2269,7 @@ impl Default for Settings {
             game_mode: GameMode::default(),
             game_mode_games: Vec::new(),
             game_mode_ignored: Vec::new(),
+            unknown_entries: unknown::UnknownEntries::default(),
         };
         settings.enable_taskbar_by_default();
         settings
@@ -2394,6 +2400,20 @@ impl Settings {
         match document.clone().try_into::<Self>() {
             Ok(settings) => Ok((settings, dirty)),
             Err(error) => {
+                // A newer build may have written values this one cannot read,
+                // such as an instance of an unknown provider. Skip only those.
+                let mut pruned = document.clone();
+                let unknown = unknown::prune(&mut pruned);
+                if !unknown.is_empty()
+                    && let Ok(mut settings) = pruned.try_into::<Self>()
+                {
+                    eprintln!(
+                        "settings entries this build cannot read were skipped and will be kept ({error}): {}",
+                        unknown.describe().join(", ")
+                    );
+                    settings.unknown_entries = unknown;
+                    return Ok((settings, dirty));
+                }
                 // A bad newly-introduced scalar must not take providers, tray
                 // widgets, or schedules down with it.
                 let stripped_time_format = document
@@ -2535,8 +2555,15 @@ impl Settings {
         let mut temporary = tempfile::NamedTempFile::new_in(parent)
             .with_context(|| format!("create temporary settings in {}", parent.display()))?;
         use std::io::Write;
+        let encoded = if self.unknown_entries.is_empty() {
+            toml::to_string_pretty(self)?
+        } else {
+            let mut document = toml::Value::try_from(self)?;
+            self.unknown_entries.restore_into(&mut document);
+            toml::to_string_pretty(&document)?
+        };
         temporary
-            .write_all(toml::to_string_pretty(self)?.as_bytes())
+            .write_all(encoded.as_bytes())
             .context("write temporary settings")?;
         temporary
             .as_file()
@@ -4689,6 +4716,106 @@ enabled = ["codex"]
         assert!(!loaded.start_at_login);
         assert!(loaded.tray_widgets.is_empty());
         assert!(loaded.is_enabled(id(ProviderKind::Codex)));
+    }
+
+    fn settings_from_a_newer_build() -> String {
+        format!(
+            r#"version = {SETTINGS_VERSION}
+onboarding_completed = true
+start_at_login = false
+game_mode = "a-mode-from-the-future"
+
+[[instances]]
+id = "codex"
+driver = "codex"
+name = "Codex"
+enabled = true
+badge = "W"
+
+[[instances]]
+id = "future-provider"
+driver = "future_provider"
+name = "Future"
+enabled = true
+
+[instances.source]
+kind = "config_folder"
+
+[[instances]]
+id = "claude"
+driver = "claude"
+name = "Claude"
+enabled = true
+"#
+        )
+    }
+
+    #[test]
+    fn skips_entries_from_a_newer_build_instead_of_resetting() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.toml");
+        fs::write(&path, settings_from_a_newer_build()).unwrap();
+
+        let loaded = Settings::load_or_create(&path).unwrap();
+        let instances = loaded
+            .instances
+            .iter()
+            .map(|instance| (instance.id.as_str(), instance.badge.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(instances, [("codex", "W"), ("claude", "")]);
+        assert!(!loaded.start_at_login);
+        assert_eq!(loaded.game_mode, GameMode::default());
+        assert!(!path.with_extension("toml.corrupt").exists());
+        assert_eq!(
+            loaded.unknown_entries.describe(),
+            ["game_mode", "instances[]"]
+        );
+    }
+
+    #[test]
+    fn saving_keeps_entries_from_a_newer_build() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.toml");
+        fs::write(&path, settings_from_a_newer_build()).unwrap();
+
+        let mut loaded = Settings::load_or_create(&path).unwrap();
+        loaded.start_at_login = true;
+        loaded.game_mode = GameMode::Always;
+        loaded.save(&path).unwrap();
+
+        let saved = fs::read_to_string(&path).unwrap();
+        assert!(saved.contains(r#"driver = "future_provider""#));
+        // A value this build writes is the user's current choice.
+        assert!(!saved.contains("a-mode-from-the-future"));
+        let reloaded = Settings::load_or_create(&path).unwrap();
+        assert!(reloaded.start_at_login);
+        assert_eq!(reloaded.game_mode, GameMode::Always);
+        assert_eq!(reloaded.instances.len(), 2);
+        assert_eq!(reloaded.unknown_entries.describe(), ["instances[]"]);
+
+        let mut future: toml::Value = toml::from_str(&saved).unwrap();
+        let instances = future["instances"].as_array().unwrap();
+        let restored = instances
+            .iter()
+            .find(|instance| instance["id"].as_str() == Some("future-provider"))
+            .unwrap();
+        assert_eq!(restored["source"]["kind"].as_str(), Some("config_folder"));
+        // Saving again must not duplicate the preserved instance.
+        reloaded.save(&path).unwrap();
+        future = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(future["instances"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn readable_settings_are_saved_without_reordering() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.toml");
+        let settings = Settings::default();
+        settings.save(&path).unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            toml::to_string_pretty(&settings).unwrap()
+        );
     }
 
     #[test]
