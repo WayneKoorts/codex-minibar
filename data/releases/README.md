@@ -18,7 +18,7 @@ data/releases/
     hero.webp            # images referenced by the summaries
 ```
 
-Locales: `en`, `ru`, `pt-BR`, `es`, `zh-CN`, `ja`, `de`, `fr`.
+Locales: `en`, `ru`, `pt-BR`, `es`, `zh-CN`, `zh-TW`, `ja`, `de`, `fr`.
 
 The Release workflow fails early when `whats-new.en.md` is missing for the
 version being released; uncheck its `whats_new` input for a release that
