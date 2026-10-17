@@ -20,6 +20,7 @@ const RU: &str = include_str!("../locales/ru/app.ftl");
 const PT_BR: &str = include_str!("../locales/pt-BR/app.ftl");
 const ES: &str = include_str!("../locales/es/app.ftl");
 const ZH_CN: &str = include_str!("../locales/zh-CN/app.ftl");
+const ZH_TW: &str = include_str!("../locales/zh-TW/app.ftl");
 const JA: &str = include_str!("../locales/ja/app.ftl");
 const DE: &str = include_str!("../locales/de/app.ftl");
 const FR: &str = include_str!("../locales/fr/app.ftl");
@@ -37,12 +38,13 @@ pub enum Language {
     Japanese,
     German,
     French,
+    TraditionalChinese,
 }
 
 static CURRENT: AtomicU8 = AtomicU8::new(1);
 
 impl Language {
-    pub const SUPPORTED: [Self; 8] = [
+    pub const SUPPORTED: [Self; 9] = [
         Self::English,
         Self::Russian,
         Self::BrazilianPortuguese,
@@ -51,6 +53,7 @@ impl Language {
         Self::Japanese,
         Self::German,
         Self::French,
+        Self::TraditionalChinese,
     ];
 
     pub fn apply(self) {
@@ -74,6 +77,7 @@ impl Language {
             Self::Japanese => 6,
             Self::German => 7,
             Self::French => 8,
+            Self::TraditionalChinese => 9,
         }
     }
     pub fn from_index(index: usize) -> Self {
@@ -82,7 +86,7 @@ impl Language {
             .copied()
             .unwrap_or(Self::Auto)
     }
-    pub fn labels() -> [&'static str; 9] {
+    pub fn labels() -> [&'static str; 10] {
         [
             tr("auto-windows"),
             "English",
@@ -93,6 +97,7 @@ impl Language {
             "日本語",
             "Deutsch",
             "Français",
+            "繁體中文",
         ]
     }
 }
@@ -102,6 +107,24 @@ pub fn current_language() -> Language {
 }
 
 fn language_from_tag(tag: &str) -> Language {
+    let normalized = tag.to_ascii_lowercase().replace('_', "-");
+    let mut subtags = normalized.split(['-', '.', '@']);
+    if subtags.next() == Some("zh") {
+        let subtags = subtags.collect::<Vec<_>>();
+        // An explicit script takes precedence over a region (e.g. zh-Hans-HK).
+        if subtags.contains(&"hant") {
+            return Language::TraditionalChinese;
+        }
+        if subtags.contains(&"hans") {
+            return Language::SimplifiedChinese;
+        }
+        if subtags
+            .iter()
+            .any(|part| matches!(*part, "tw" | "hk" | "mo"))
+        {
+            return Language::TraditionalChinese;
+        }
+    }
     match tag
         .split(['-', '_', '.', '@'])
         .next()
@@ -120,6 +143,23 @@ fn language_from_tag(tag: &str) -> Language {
     }
 }
 
+#[cfg(any(windows, test))]
+fn language_from_windows_langid(langid: u16) -> Language {
+    if matches!(langid, 0x0404 | 0x0c04 | 0x1404 | 0x7c04) {
+        return Language::TraditionalChinese;
+    }
+    language_from_tag(match langid & 0x03ff {
+        0x19 => "ru",
+        0x16 => "pt",
+        0x0a => "es",
+        0x04 => "zh",
+        0x11 => "ja",
+        0x07 => "de",
+        0x0c => "fr",
+        _ => "en",
+    })
+}
+
 fn system_language() -> Language {
     #[cfg(windows)]
     {
@@ -128,16 +168,7 @@ fn system_language() -> Language {
         unsafe extern "system" {
             fn GetUserDefaultUILanguage() -> u16;
         }
-        language_from_tag(match unsafe { GetUserDefaultUILanguage() & 0x03ff } {
-            0x19 => "ru",
-            0x16 => "pt",
-            0x0a => "es",
-            0x04 => "zh",
-            0x11 => "ja",
-            0x07 => "de",
-            0x0c => "fr",
-            _ => "en",
-        })
+        language_from_windows_langid(unsafe { GetUserDefaultUILanguage() })
     }
     #[cfg(not(windows))]
     {
@@ -204,6 +235,7 @@ struct Catalogs {
     pt_br: FluentBundle<FluentResource>,
     es: FluentBundle<FluentResource>,
     zh_cn: FluentBundle<FluentResource>,
+    zh_tw: FluentBundle<FluentResource>,
     ja: FluentBundle<FluentResource>,
     de: FluentBundle<FluentResource>,
     fr: FluentBundle<FluentResource>,
@@ -216,6 +248,7 @@ impl Catalogs {
             pt_br: bundle("pt-BR", PT_BR),
             es: bundle("es", ES),
             zh_cn: bundle("zh-CN", ZH_CN),
+            zh_tw: bundle("zh-TW", ZH_TW),
             ja: bundle("ja", JA),
             de: bundle("de", DE),
             fr: bundle("fr", FR),
@@ -227,6 +260,7 @@ impl Catalogs {
             Language::BrazilianPortuguese => &self.pt_br,
             Language::Spanish => &self.es,
             Language::SimplifiedChinese => &self.zh_cn,
+            Language::TraditionalChinese => &self.zh_tw,
             Language::Japanese => &self.ja,
             Language::German => &self.de,
             Language::French => &self.fr,
@@ -249,7 +283,7 @@ impl Catalogs {
 
 thread_local! { static CATALOGS: RefCell<Catalogs> = RefCell::new(Catalogs::new()); }
 
-static LABELS: LazyLock<HashMap<String, [&'static str; 8]>> = LazyLock::new(|| {
+static LABELS: LazyLock<HashMap<String, [&'static str; 9]>> = LazyLock::new(|| {
     let catalogs = Catalogs::new();
     let mut labels = HashMap::new();
     for line in EN
@@ -324,7 +358,9 @@ fn month_day_in(language: Language, date: impl chrono::Datelike) -> String {
         Language::Russian | Language::French => format!("{} {month}", date.day()),
         Language::German => format!("{}. {month}", date.day()),
         Language::BrazilianPortuguese | Language::Spanish => format!("{} de {month}", date.day()),
-        Language::SimplifiedChinese | Language::Japanese => format!("{month}{}日", date.day()),
+        Language::SimplifiedChinese | Language::TraditionalChinese | Language::Japanese => {
+            format!("{month}{}日", date.day())
+        }
         _ => format!("{month} {}", date.day()),
     }
 }
@@ -339,7 +375,7 @@ pub fn date_with_year(date: impl chrono::Datelike + Copy) -> String {
 
 fn date_with_year_in(language: Language, date: impl chrono::Datelike + Copy) -> String {
     match language {
-        Language::SimplifiedChinese | Language::Japanese => {
+        Language::SimplifiedChinese | Language::TraditionalChinese | Language::Japanese => {
             format!("{}年{}", date.year(), month_day_in(language, date))
         }
         Language::German | Language::French => {
@@ -454,6 +490,7 @@ mod tests {
             (Language::BrazilianPortuguese, PT_BR),
             (Language::Spanish, ES),
             (Language::SimplifiedChinese, ZH_CN),
+            (Language::TraditionalChinese, ZH_TW),
             (Language::Japanese, JA),
             (Language::German, DE),
             (Language::French, FR),
@@ -594,6 +631,7 @@ mod tests {
             pt_br: bundle("pt-BR", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
             es: bundle("es", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
             zh_cn: bundle("zh-CN", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
+            zh_tw: bundle("zh-TW", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
             ja: bundle("ja", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
             de: bundle("de", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
             fr: bundle("fr", "empty = { \"\" }\nbad = Hello { $unknown }\n"),
@@ -617,6 +655,35 @@ mod tests {
     }
 
     #[test]
+    fn traditional_chinese_display_languages_do_not_use_simplified_chinese() {
+        for tag in ["zh-TW", "zh_HK.UTF-8", "zh-MO", "zh-Hant", "ZH-hant-TW"] {
+            assert_eq!(
+                language_from_tag(tag),
+                Language::TraditionalChinese,
+                "{tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn windows_display_language_preserves_chinese_script() {
+        for langid in [0x0404, 0x0c04, 0x1404, 0x7c04] {
+            assert_eq!(
+                language_from_windows_langid(langid),
+                Language::TraditionalChinese
+            );
+        }
+        for langid in [0x0004, 0x0804, 0x1004, 0x7804] {
+            assert_eq!(
+                language_from_windows_langid(langid),
+                Language::SimplifiedChinese
+            );
+        }
+        assert_eq!(language_from_windows_langid(0x0409), Language::English);
+        assert_eq!(language_from_windows_langid(0x0411), Language::Japanese);
+    }
+
+    #[test]
     fn language_selection_indices_and_display_language_tags() {
         for language in std::iter::once(Language::Auto).chain(Language::SUPPORTED) {
             assert_eq!(Language::from_index(language.index()), language);
@@ -629,6 +696,8 @@ mod tests {
             ("ES-mx", Language::Spanish),
             ("zh_CN.UTF-8", Language::SimplifiedChinese),
             ("zh-Hans", Language::SimplifiedChinese),
+            ("zh-Hans-HK", Language::SimplifiedChinese),
+            ("zh-Hant-CN", Language::TraditionalChinese),
             ("ru_RU", Language::Russian),
             ("ja-JP", Language::Japanese),
             ("ja_JP.UTF-8", Language::Japanese),
@@ -658,6 +727,7 @@ mod tests {
                 "Configuración de Codex Minibar",
             ),
             (Language::SimplifiedChinese, "设置", "Codex Minibar 设置"),
+            (Language::TraditionalChinese, "設定", "Codex Minibar 設定"),
             (Language::Japanese, "設定", "Codex Minibar の設定"),
             (
                 Language::German,
@@ -699,6 +769,12 @@ mod tests {
                 "已删除 Settings。",
             ),
             (
+                Language::TraditionalChinese,
+                "1 個 API 金鑰",
+                "2 個 API 金鑰",
+                "已刪除 Settings。",
+            ),
+            (
                 Language::Japanese,
                 "1 個の API キー",
                 "2 個の API キー",
@@ -734,6 +810,7 @@ mod tests {
             (Language::BrazilianPortuguese, "0 solicitação"),
             (Language::Spanish, "0 solicitudes"),
             (Language::SimplifiedChinese, "0 次请求"),
+            (Language::TraditionalChinese, "0 次請求"),
             (Language::Japanese, "0 件のリクエスト"),
             (Language::German, "0 Anfragen"),
             (Language::French, "0 requête"),
@@ -751,6 +828,7 @@ mod tests {
             (Language::BrazilianPortuguese, "8 de out de 2026"),
             (Language::Spanish, "8 de oct de 2026"),
             (Language::SimplifiedChinese, "2026年10月8日"),
+            (Language::TraditionalChinese, "2026年10月8日"),
             (Language::Japanese, "2026年10月8日"),
             (Language::German, "8. Okt. 2026"),
             (Language::French, "8 oct. 2026"),

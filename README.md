@@ -83,10 +83,11 @@ Pick an accent color, a font and an independent popup border. Auto follows the W
   <img src="docs/media/1.0.0/themes.webp" alt="Popup themes">
 </p>
 
-### Eight languages
+### Nine languages
 
-English, Русский, Deutsch, Français, Español, Português (Brasil), 日本語 and 简体中文.
-Auto follows the Windows display language.
+English, Русский, Deutsch, Français, Español, Português (Brasil), 日本語, 简体中文 and 繁體中文.
+Auto follows the Windows display language, including Traditional Chinese in Taiwan,
+Hong Kong and Macao.
 
 <p align="center">
   <img src="docs/media/1.0.0/languages.webp" alt="Popup in different languages">

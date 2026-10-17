@@ -1,15 +1,15 @@
-﻿# Localization
+# Localization
 
 Codex Minibar uses embedded Mozilla Fluent catalogs. English is the source
 language. Complete translations are available in Russian, Brazilian Portuguese,
-Spanish, Simplified Chinese, Japanese, German, and French. Each catalog contains
-867 messages.
+Spanish, Simplified Chinese, Traditional Chinese, Japanese, German, and French.
 
 - `locales/en/app.ftl`: existing English copy and full-message templates.
 - `locales/ru/app.ftl`: Russian translations, including plural rules and dates.
 - `locales/pt-BR/app.ftl`: Brazilian Portuguese translations.
 - `locales/es/app.ftl`: Spanish translations.
 - `locales/zh-CN/app.ftl`: Simplified Chinese translations.
+- `locales/zh-TW/app.ftl`: Traditional Chinese translations using Taiwan terminology.
 - `locales/ja/app.ftl`: Japanese translations.
 - `locales/de/app.ftl`: German translations.
 - `locales/fr/app.ftl`: French translations.
@@ -29,16 +29,18 @@ dialogs follow Windows' own language.
 
 Open Settings > General > Language (Настройки > Общие > Язык). The choices are
 Auto (Windows), English, Русский, Português (Brasil), Español, 简体中文, 日本語,
-Deutsch, and Français.
+Deutsch, Français, and 繁體中文.
 Language names stay in their native spelling so they are recognizable in any
 selected language. Onboarding also offers this setting on its
 General page. Old settings files default to Auto. Auto uses the Windows display
 language, independently of the keyboard layout or regional clock format, and
 uses English for unsupported languages. Portuguese display languages use the
-Brazilian catalog; Spanish regional variants use the Spanish catalog; Chinese
-display languages use the Simplified Chinese catalog. No Traditional Chinese
-catalog is included. Japanese, German, and French regional variants use their
-respective catalogs.
+Brazilian catalog; Spanish regional variants use the Spanish catalog. Chinese
+display languages in Taiwan, Hong Kong, and Macao use the Traditional Chinese
+catalog; mainland China and Singapore use Simplified Chinese. Language tags
+with an explicit `Hant` or `Hans` script take precedence over their region.
+Unqualified `zh` continues to use Simplified Chinese. Japanese, German, and
+French regional variants use their respective catalogs.
 
 Textual dates use day–month order in Russian, Portuguese, and Spanish,
 day–month–year order in German and French, and year–month–day order in Chinese
@@ -92,7 +94,7 @@ Japanese use invariant count phrases.
 Numeric selectors
 must receive numbers: the resolver recognizes these messages' count parameters.
 
-Add the English source first, update all seven translation catalogs, then regenerate the
+Add the English source first, update all eight translation catalogs, then regenerate the
 translator template:
 
 ```powershell
@@ -124,7 +126,7 @@ cargo test --all-targets --all-features --locked
 ```
 
 Localization tests validate Fluent syntax, unique IDs, exact message and parameter
-parity across all eight catalogs, template coverage, literal translation call sites,
+parity across all nine catalogs, template coverage, literal translation call sites,
 plural forms, per-message fallback in every translated language, settings
 round-trips, language-selection indices, display-language detection, textual dates,
 and preservation of parameter values. Every catalog is resolved directly for
