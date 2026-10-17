@@ -415,6 +415,7 @@ fn locale_tag(language: Language) -> &'static str {
         Language::BrazilianPortuguese => "pt-BR",
         Language::Spanish => "es",
         Language::SimplifiedChinese => "zh-CN",
+        Language::TraditionalChinese => "zh-TW",
         Language::Japanese => "ja",
         Language::German => "de",
         Language::French => "fr",
