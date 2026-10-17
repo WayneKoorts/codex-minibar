@@ -850,6 +850,62 @@ fn openrouter_places_each_chart_inside_its_own_account_on_both_surfaces() {
 }
 
 #[test]
+fn openrouter_provider_tab_lists_keys_instead_of_spending_cards() {
+    let mut limits = RateLimits::default();
+    limits.openrouter_accounts.push(OpenRouterAccountSnapshot {
+        id: "account".into(),
+        name: "account".into(),
+        api_keys: vec![crate::limits::OpenRouterApiKeySnapshot {
+            id: "key".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
+    let spending_cards = |cards: &[Card<'_>]| {
+        cards
+            .iter()
+            .flat_map(Card::nested)
+            .filter(|card| matches!(card, Card::Spending { .. }))
+            .count()
+    };
+    for spending in [true, false] {
+        let mut visibility = all_visible();
+        visibility.set_brick("openrouter.spending", spending, spending);
+        let cards = test_cards(
+            ProviderKind::OpenRouter,
+            true,
+            &limits,
+            &visibility,
+            PopupSurface::ProviderTab,
+            true,
+            false,
+            false,
+        );
+        // The list leads the account strip and stays with spending hidden.
+        assert!(matches!(
+            cards[1].nested().first(),
+            Some(Card::OpenRouterKeys {
+                account: "account",
+                ..
+            })
+        ));
+        assert_eq!(spending_cards(&cards), 0);
+    }
+    let home = test_cards(
+        ProviderKind::OpenRouter,
+        true,
+        &limits,
+        &all_visible(),
+        PopupSurface::HomeTab,
+        true,
+        false,
+        false,
+    );
+    assert!(!home.iter().any(Card::has_key_list));
+    assert_eq!(spending_cards(&home), 1);
+}
+
+#[test]
 fn duplicate_account_names_keep_separate_heading_identities() {
     let limits = RateLimits {
         openrouter_accounts: ["account-a", "account-b"]

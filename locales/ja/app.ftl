@@ -2460,7 +2460,7 @@ openrouter-keys-enabled = 有効
 openrouter-keys-delete = 削除
 
 
-openrouter-keys-delete-tracked = このアプリが使用中のキーです。先に設定で削除してください。
+openrouter-keys-delete-tracked = Minibar での追跡も停止します。
 
 
 openrouter-keys-saving = 保存中…
@@ -2569,6 +2569,24 @@ openrouter-keys-not-a-management-key = このキーは他のキーを管理で�
 
 
 openrouter-keys-key-not-found = このキーはもう存在しません。
+
+
+openrouter-keys-untrack = アプリから削除
+
+
+openrouter-keys-untracking = 削除中…
+
+
+openrouter-keys-untrack-title = 「{ $name }」の追跡を停止しますか？
+
+
+openrouter-keys-untrack-message = Minibar はこのキーを忘れます。OpenRouter ではそのまま使えます。
+
+
+openrouter-keys-tracked-here = Minibar がこのキーを追跡しています。
+
+
+openrouter-keys-manage-hint = キーを作成・編集・削除するには、設定で管理キーを追加してください。
 
 # src/settings_window/notifications.rs
 notification-sounds = 通知音

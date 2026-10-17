@@ -2370,7 +2370,13 @@ impl PopupRoot {
                 &options,
             );
             let mut children = self.render_cards(&cards, PopupSurface::ProviderTab, window, cx);
-            if openrouter && let Some(keys) = self.render_keys_section(provider, window, cx) {
+            // Before the first quota sample there is no account strip to
+            // carry the key list, so it follows the heading on its own.
+            if openrouter
+                && !cards.iter().any(model::Card::has_key_list)
+                && let Some(account) = self.openrouter_account(provider)
+                && let Some(keys) = self.render_keys_section(provider, &account.id, window, cx)
+            {
                 children.push(keys);
             }
             sections.push(

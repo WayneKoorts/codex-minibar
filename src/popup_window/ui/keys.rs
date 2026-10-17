@@ -1,7 +1,9 @@
 //! OpenRouter key administration on the OpenRouter tab.
 //!
-//! Accounts with a saved management key get a Keys section under their
-//! cards: every key with its spend, an editor that expands in place, inline
+//! Every account lists its keys at the top of its section, in place of the
+//! per-key spending cards. Without a management key the list holds the keys
+//! this app tracks, each removable from the app. With one it holds every key
+//! on the account with its spend, an editor that expands in place, inline
 //! delete confirmation, and New key / one-time reveal pages that replace the
 //! account's section while open. Network calls run on the background
 //! executor; the plaintext of a created key lives only in [`Reveal`] and is
@@ -24,6 +26,7 @@ use super::{
     theme::HslaExt,
 };
 use crate::{
+    limits::SpendingSummary,
     openrouter::admin::{self, KeyPatch, LimitReset, ManagedKey, NewKey},
     popup_window::*,
     settings::OpenRouterAccount,
@@ -43,6 +46,9 @@ const ROW_CAP: f32 = 96.0;
 const PAGE_SLIDE: f32 = 28.0;
 /// Fluent's critical button fill; readable with white text in both themes.
 const CRITICAL_FILL: (u8, u8, u8) = (196, 43, 28);
+/// Row ids of tracked keys the management list does not show; management
+/// hashes never carry it.
+const TRACKED_ROW: &str = "app:";
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct RowId {
@@ -61,6 +67,122 @@ struct AccountKeys {
     cache_checked: bool,
     error: Option<String>,
     generation: u64,
+}
+
+/// A key this app tracks, as the quota worker last sampled it.
+#[derive(Clone)]
+struct TrackedKey {
+    /// This app's id for the key, not OpenRouter's hash.
+    id: String,
+    name: String,
+    masked: Option<String>,
+    spending: SpendingSummary,
+    has_live_usage: bool,
+    expires_at: Option<DateTime<Utc>>,
+    disabled: bool,
+}
+
+/// One row of an account's key list.
+enum ListedKey {
+    /// A key from the management API; `tracked` is this app's id for it.
+    Managed {
+        key: ManagedKey,
+        tracked: Option<String>,
+    },
+    /// A tracked key without a management entry: the account has no
+    /// management key, its list has not loaded, or the key is gone there.
+    Tracked(TrackedKey),
+}
+
+impl ListedKey {
+    fn hash(&self) -> String {
+        match self {
+            Self::Managed { key, .. } => key.hash.clone(),
+            Self::Tracked(key) => format!("{TRACKED_ROW}{}", key.id),
+        }
+    }
+
+    fn tracked_id(&self) -> Option<&str> {
+        match self {
+            Self::Managed { tracked, .. } => tracked.as_deref(),
+            Self::Tracked(key) => Some(&key.id),
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            Self::Managed { key, .. } => &key.name,
+            Self::Tracked(key) => &key.name,
+        }
+    }
+}
+
+/// What a collapsed row shows, whichever source the key came from.
+struct KeyRowView {
+    expired: bool,
+    disabled: bool,
+    percent: Option<f32>,
+    amount: String,
+    summary: String,
+    /// Bottom-right note: today's spend, or a tracked key's next reset.
+    aside: Option<String>,
+    /// The "This app" badge; every tracked-only row is this app's anyway.
+    badge: bool,
+}
+
+impl KeyRowView {
+    fn new(listed: &ListedKey, now: DateTime<Utc>) -> Self {
+        match listed {
+            ListedKey::Managed { key, tracked } => Self {
+                expired: key.expires_at.is_some_and(|at| at <= now),
+                disabled: key.disabled,
+                percent: used_percent(key.period_usage_microusd(), key.limit_microusd),
+                amount: usd(key.period_usage_microusd()),
+                summary: key_summary(key, now),
+                aside: (!key.is_expired(now) && !key.disabled).then(|| {
+                    crate::i18n::format(
+                        "openrouter-keys-today",
+                        &[("amount", usd(key.usage_daily_microusd))],
+                    )
+                }),
+                badge: tracked.is_some(),
+            },
+            ListedKey::Tracked(key) => {
+                let expired = key.expires_at.is_some_and(|at| at <= now);
+                Self {
+                    expired,
+                    disabled: key.disabled,
+                    percent: key
+                        .has_live_usage
+                        .then(|| {
+                            used_percent(key.spending.used_microusd, key.spending.limit_microusd)
+                        })
+                        .flatten(),
+                    amount: tracked_amount(key),
+                    summary: tracked_summary(key, now),
+                    aside: key
+                        .spending
+                        .resets_at
+                        .filter(|_| !expired && !key.disabled)
+                        .map(|at| {
+                            format!(
+                                "{} {}",
+                                crate::i18n::tr("resets-in"),
+                                format_reset_in(Some(at))
+                            )
+                        }),
+                    badge: false,
+                }
+            }
+        }
+    }
+}
+
+/// Inline "Remove from app" confirmation for one row.
+struct Untrack {
+    row: RowId,
+    busy: bool,
+    error: Option<String>,
 }
 
 struct Editor {
@@ -192,6 +314,10 @@ pub(crate) struct KeyAdmin {
     show_all: HashSet<String>,
     /// Deleted rows collapse before they leave the list.
     removing: HashSet<RowId>,
+    untrack: Option<Untrack>,
+    /// `(account, key id)` of tracked keys removed from the app; hidden until
+    /// the next quota sample drops them.
+    untracked: HashSet<(String, String)>,
     inputs: Option<Inputs>,
 }
 
@@ -209,6 +335,7 @@ impl KeyAdmin {
         self.open_row = None;
         self.editor = None;
         self.confirm_delete = None;
+        self.untrack = None;
         crate::popup::set_pinned(false);
     }
 }
@@ -291,23 +418,62 @@ fn reset_suffix(reset: LimitReset) -> Option<&'static str> {
 
 /// "$3.40 of $10 · resets monthly", "No limit · expires Oct 31".
 fn key_summary(key: &ManagedKey, now: DateTime<Utc>) -> String {
+    limit_summary(
+        usd(key.period_usage_microusd()),
+        key.limit_microusd,
+        reset_suffix(key.limit_reset),
+        key.expires_at,
+        now,
+    )
+}
+
+/// The same summary for a tracked key, from its last quota sample.
+fn tracked_summary(key: &TrackedKey, now: DateTime<Utc>) -> String {
+    let reset = match key.spending.reset_kind.as_deref() {
+        Some("daily") => reset_suffix(LimitReset::Daily),
+        Some("weekly") => reset_suffix(LimitReset::Weekly),
+        Some("monthly") => reset_suffix(LimitReset::Monthly),
+        _ => None,
+    };
+    limit_summary(
+        tracked_amount(key),
+        key.spending.limit_microusd,
+        reset,
+        key.expires_at,
+        now,
+    )
+}
+
+/// Spend of a tracked key; unknown until its usage was fetched.
+fn tracked_amount(key: &TrackedKey) -> String {
+    if key.has_live_usage {
+        usd(key.spending.used_microusd)
+    } else {
+        "?.??".into()
+    }
+}
+
+fn limit_summary(
+    amount: String,
+    limit: Option<u64>,
+    reset: Option<&'static str>,
+    expires_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> String {
     let mut parts = Vec::new();
-    match key.limit_microusd {
+    match limit {
         Some(limit) => parts.push(crate::i18n::format(
             "openrouter-keys-of-limit",
-            &[
-                ("amount", usd(key.period_usage_microusd())),
-                ("limit", usd(limit)),
-            ],
+            &[("amount", amount), ("limit", usd(limit))],
         )),
         None => parts.push(crate::i18n::tr("openrouter-keys-no-limit").to_owned()),
     }
-    if key.limit_microusd.is_some()
-        && let Some(reset) = reset_suffix(key.limit_reset)
+    if limit.is_some()
+        && let Some(reset) = reset
     {
         parts.push(reset.to_owned());
     }
-    if let Some(expires) = key.expires_at {
+    if let Some(expires) = expires_at {
         let date = crate::i18n::month_day(expires.with_timezone(&Local));
         parts.push(if expires <= now {
             crate::i18n::format("openrouter-keys-expired-on", &[("date", date)])
@@ -319,9 +485,9 @@ fn key_summary(key: &ManagedKey, now: DateTime<Utc>) -> String {
 }
 
 /// Used share of the limit in percent, if the key has one.
-fn used_percent(key: &ManagedKey) -> Option<f32> {
-    let limit = key.limit_microusd.filter(|limit| *limit > 0)?;
-    Some((key.period_usage_microusd() as f64 / limit as f64 * 100.0).clamp(0.0, 100.0) as f32)
+fn used_percent(used: u64, limit: Option<u64>) -> Option<f32> {
+    let limit = limit.filter(|limit| *limit > 0)?;
+    Some((used as f64 / limit as f64 * 100.0).clamp(0.0, 100.0) as f32)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -336,7 +502,7 @@ enum Tone {
 impl PopupRoot {
     // ----- data ---------------------------------------------------------------
 
-    fn openrouter_account(&self, provider: ProviderId) -> Option<OpenRouterAccount> {
+    pub(super) fn openrouter_account(&self, provider: ProviderId) -> Option<OpenRouterAccount> {
         self.ui
             .instances
             .iter()
@@ -344,16 +510,100 @@ impl PopupRoot {
             .and_then(|instance| instance.openrouter.clone())
     }
 
-    /// Masked fingerprints of the keys this app tracks for the account.
-    fn tracked_masks(&self, provider: ProviderId, account: &str) -> Vec<String> {
+    /// The keys this app tracks for the account, from the last quota sample.
+    fn tracked_keys(&self, provider: ProviderId, account: &str) -> Vec<TrackedKey> {
         self.limits
             .get(provider)
             .openrouter_accounts
             .iter()
             .filter(|snapshot| snapshot.id == account)
-            .flat_map(|snapshot| snapshot.api_keys.iter())
-            .filter_map(|key| key.masked_key.clone())
+            .flat_map(|snapshot| snapshot.api_keys.iter().enumerate())
+            .map(|(index, key)| TrackedKey {
+                id: key.id.clone(),
+                name: key
+                    .local_name
+                    .as_deref()
+                    .or(key.label.as_deref())
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map_or_else(
+                        || crate::i18n::format("key-39df89", &[("v0", (index + 1).to_string())]),
+                        str::to_owned,
+                    ),
+                masked: key
+                    .masked_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|mask| !mask.is_empty())
+                    .map(str::to_owned),
+                spending: key.spending.clone(),
+                has_live_usage: key.has_live_usage,
+                expires_at: key.expires_at,
+                disabled: key.disabled,
+            })
             .collect()
+    }
+
+    /// The account's list: management keys first, then tracked keys the
+    /// management list does not show. Removed rows stay while they collapse.
+    fn listed_keys(
+        &mut self,
+        provider: ProviderId,
+        account: &str,
+        managed: Option<&[ManagedKey]>,
+    ) -> Vec<ListedKey> {
+        let tracked = self.tracked_keys(provider, account);
+        // A removal is settled once the quota sample no longer has the key.
+        self.keys
+            .untracked
+            .retain(|(owner, id)| owner != account || tracked.iter().any(|key| key.id == *id));
+        let tracked = tracked
+            .into_iter()
+            .filter(|key| {
+                !self
+                    .keys
+                    .untracked
+                    .contains(&(account.to_owned(), key.id.clone()))
+                    || self.keys.removing.contains(&RowId {
+                        account: account.to_owned(),
+                        hash: format!("{TRACKED_ROW}{}", key.id),
+                    })
+            })
+            .collect::<Vec<_>>();
+        let Some(managed) = managed else {
+            return tracked.into_iter().map(ListedKey::Tracked).collect();
+        };
+        let mut matched = HashSet::new();
+        let mut rows = managed
+            .iter()
+            .map(|key| {
+                let tracked = tracked
+                    .iter()
+                    .find(|candidate| {
+                        candidate
+                            .masked
+                            .as_deref()
+                            .is_some_and(|mask| key.matches_mask(mask))
+                    })
+                    .map(|candidate| candidate.id.clone());
+                if let Some(id) = &tracked {
+                    matched.insert(id.clone());
+                }
+                ListedKey::Managed {
+                    key: key.clone(),
+                    tracked,
+                }
+            })
+            .collect::<Vec<_>>();
+        // A key without a fingerprint yet cannot be matched; listing it would
+        // show it twice until its first sample.
+        rows.extend(
+            tracked
+                .into_iter()
+                .filter(|key| key.masked.is_some() && !matched.contains(&key.id))
+                .map(ListedKey::Tracked),
+        );
+        rows
     }
 
     fn ensure_keys_loaded(&mut self, account: &str, cx: &mut Context<Self>) {
@@ -536,17 +786,21 @@ impl PopupRoot {
     // ----- actions ------------------------------------------------------------
 
     fn toggle_key_row(&mut self, row: RowId, window: &mut Window, cx: &mut Context<Self>) {
+        self.keys.confirm_delete = None;
+        self.keys.untrack = None;
         if self.keys.open_row.as_ref() == Some(&row) {
             self.keys.open_row = None;
             self.keys.editor = None;
-            self.keys.confirm_delete = None;
             cx.notify();
             return;
         }
+        // A tracked-only row has no editor, just its details and removal.
         let Some(key) = self.find_key(&row) else {
+            self.keys.editor = None;
+            self.keys.open_row = Some(row);
+            cx.notify();
             return;
         };
-        self.keys.confirm_delete = None;
         self.keys.editor = Some(Editor {
             row: row.clone(),
             reset: key.limit_reset,
@@ -571,7 +825,7 @@ impl PopupRoot {
         let Some(editor) = self.keys.editor.as_ref() else {
             return;
         };
-        if editor.saving || self.keys.confirm_delete.is_some() {
+        if editor.saving || self.keys.confirm_delete.is_some() || self.keys.untrack.is_some() {
             return;
         }
         let row = editor.row.clone();
@@ -676,7 +930,8 @@ impl PopupRoot {
         cx.notify();
     }
 
-    fn delete_key(&mut self, row: RowId, cx: &mut Context<Self>) {
+    /// Deletes the key on OpenRouter; a tracked key also leaves this app.
+    fn delete_key(&mut self, row: RowId, tracked: Option<String>, cx: &mut Context<Self>) {
         let Some(provider) = self.key_provider(&row.account) else {
             return;
         };
@@ -699,6 +954,20 @@ impl PopupRoot {
                         this.keys.confirm_delete = None;
                     }
                     this.keys.removing.insert(row.clone());
+                    if let Some(key_id) = tracked {
+                        this.keys
+                            .untracked
+                            .insert((row.account.clone(), key_id.clone()));
+                        let (account, settings_tx) =
+                            (row.account.clone(), this.state.settings_tx.clone());
+                        std::thread::spawn(move || {
+                            crate::popup_window::remove_openrouter_api_key(
+                                account,
+                                key_id,
+                                settings_tx,
+                            )
+                        });
+                    }
                     this.after_key_change(provider, &row.account);
                 }
                 Err(error) => {
@@ -710,6 +979,63 @@ impl PopupRoot {
             },
             cx,
         );
+        cx.notify();
+    }
+
+    /// Stops tracking a key in this app; it keeps working on OpenRouter.
+    fn untrack_key(&mut self, row: RowId, key_id: String, cx: &mut Context<Self>) {
+        let Some(provider) = self.key_provider(&row.account) else {
+            return;
+        };
+        match self.keys.untrack.as_mut() {
+            Some(untrack) if untrack.row == row && !untrack.busy => {
+                untrack.busy = true;
+                untrack.error = None;
+            }
+            _ => return,
+        }
+        let settings_tx = self.state.settings_tx.clone();
+        let (account, removed) = (row.account.clone(), key_id.clone());
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::popup_window::try_remove_openrouter_api_key(
+                        account,
+                        removed,
+                        settings_tx,
+                    )
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(()) => {
+                        if this.keys.untrack.as_ref().is_some_and(|u| u.row == row) {
+                            this.keys.untrack = None;
+                        }
+                        this.keys.untracked.insert((row.account.clone(), key_id));
+                        // A tracked-only row leaves the list; a management
+                        // row just loses its badge.
+                        if row.hash.starts_with(TRACKED_ROW) {
+                            if this.keys.open_row.as_ref() == Some(&row) {
+                                this.keys.open_row = None;
+                                this.keys.editor = None;
+                            }
+                            this.keys.removing.insert(row.clone());
+                        }
+                        this.after_key_change(provider, &row.account);
+                    }
+                    Err(error) => {
+                        if let Some(untrack) = this.keys.untrack.as_mut().filter(|u| u.row == row) {
+                            untrack.busy = false;
+                            untrack.error = Some(format!("{error:#}"));
+                        }
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
         cx.notify();
     }
 
@@ -737,6 +1063,7 @@ impl PopupRoot {
         self.keys.open_row = None;
         self.keys.editor = None;
         self.keys.confirm_delete = None;
+        self.keys.untrack = None;
         self.fx
             .snap(fx::key(("or-key-page", "create", account.as_str())), 0.0);
         self.keys.page = Some(KeyPage::Create(CreateForm {
@@ -1172,33 +1499,26 @@ impl PopupRoot {
 
     // ----- Keys section ---------------------------------------------------------
 
-    /// The Keys section for an OpenRouter instance with a management key.
+    /// The key list at the top of an OpenRouter account's section.
     pub(super) fn render_keys_section(
         &mut self,
         provider: ProviderId,
+        account_id: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let account = self.openrouter_account(provider)?;
+        let account = self
+            .openrouter_account(provider)
+            .filter(|account| account.id == account_id)?;
         let has_management_key = crate::openrouter::management_key_hint(&account.id)
             .ok()
             .flatten()
             .is_some();
-        if !has_management_key {
-            return None;
+        if has_management_key {
+            self.ensure_keys_loaded(&account.id, cx);
+            self.ensure_key_inputs(window, cx);
         }
-        self.ensure_keys_loaded(&account.id, cx);
-        self.ensure_key_inputs(window, cx);
         let palette = self.palette.clone();
-        let (keys, loaded, loading, error) = {
-            let entry = self.keys.accounts.get(&account.id)?;
-            (
-                entry.keys.clone(),
-                entry.loaded,
-                entry.loading,
-                entry.error.clone(),
-            )
-        };
         let account_id = account.id.clone();
 
         // Rows whose collapse finished leave the list for good.
@@ -1224,16 +1544,27 @@ impl PopupRoot {
                 entry.keys.retain(|key| key.hash != row.hash);
             }
         }
+        let (managed, loading, error) = match self.keys.accounts.get(&account_id) {
+            Some(entry) if has_management_key => (
+                entry.loaded.then(|| entry.keys.clone()),
+                entry.loading,
+                entry.error.clone(),
+            ),
+            _ => (None, false, None),
+        };
+        let rows = self.listed_keys(provider, &account_id, managed.as_deref());
 
-        let visible_count = keys
+        let visible_count = rows
             .iter()
-            .filter(|key| {
+            .filter(|row| {
                 !self.keys.removing.contains(&RowId {
                     account: account_id.clone(),
-                    hash: key.hash.clone(),
+                    hash: row.hash(),
                 })
             })
             .count();
+        // Until the management list arrives, tracked keys stand in for it.
+        let listing = managed.is_some() || !has_management_key || !rows.is_empty();
         let mut title = div()
             .flex()
             .flex_row()
@@ -1244,7 +1575,7 @@ impl PopupRoot {
                 crate::i18n::tr("openrouter-keys-title"),
                 palette.text_secondary,
             )));
-        if loaded {
+        if listing {
             title = title.child(caption(format!("· {visible_count}"), palette.text_tertiary));
         }
         if loading {
@@ -1253,7 +1584,7 @@ impl PopupRoot {
                 palette.text_tertiary,
             )));
         }
-        let new_key = {
+        let new_key = if has_management_key {
             let account_id = account_id.clone();
             let page = cx.entity().downgrade();
             kit::Button::new(
@@ -1268,10 +1599,14 @@ impl PopupRoot {
                 });
             }))
             .render(&self.kit)
+        } else {
+            div().into_any_element()
         };
+        // The button sets the header's height; keep it without one.
         let header = components::split_row(title, new_key)
+            .min_h(px(28.0))
             .px(px(4.0))
-            .mt(px(8.0));
+            .mt(px(4.0));
 
         let mut section = div().flex().flex_col().gap(px(6.0)).child(header);
         if let Some(error) = error.as_ref() {
@@ -1301,30 +1636,28 @@ impl PopupRoot {
                 Some(retry),
             ));
         }
-        if !loaded {
-            if error.is_none() {
-                section = section.child(
-                    caption(
-                        crate::i18n::tr("openrouter-keys-loading"),
-                        palette.text_tertiary,
-                    )
-                    .mx(px(4.0)),
-                );
+        let hint = (!has_management_key).then(|| {
+            caption(
+                crate::i18n::tr("openrouter-keys-manage-hint"),
+                palette.text_tertiary,
+            )
+            .mx(px(4.0))
+        });
+        if rows.is_empty() {
+            let message = if !listing {
+                error.is_none().then_some("openrouter-keys-loading")
+            } else if has_management_key {
+                Some("openrouter-keys-empty")
+            } else {
+                None
+            };
+            if let Some(message) = message {
+                section = section
+                    .child(caption(crate::i18n::tr(message), palette.text_tertiary).mx(px(4.0)));
             }
-            return Some(section.into_any_element());
-        }
-        if keys.is_empty() {
-            section = section.child(
-                caption(
-                    crate::i18n::tr("openrouter-keys-empty"),
-                    palette.text_tertiary,
-                )
-                .mx(px(4.0)),
-            );
-            return Some(section.into_any_element());
+            return Some(section.children(hint).into_any_element());
         }
 
-        let masks = self.tracked_masks(provider, &account_id);
         let show_all = self.keys.show_all.contains(&account_id);
         // An open row always stays listed, even past the collapsed count.
         let open_hash = self
@@ -1338,19 +1671,18 @@ impl PopupRoot {
             .flex()
             .flex_col()
             .overflow_hidden();
-        let has_footer = keys.len() > COLLAPSED_ROWS;
-        let listed: Vec<&ManagedKey> = keys
+        let has_footer = rows.len() > COLLAPSED_ROWS;
+        let listed: Vec<&ListedKey> = rows
             .iter()
             .enumerate()
-            .filter(|(index, key)| {
+            .filter(|(index, row)| {
                 show_all
                     || *index < COLLAPSED_ROWS
-                    || open_hash.as_deref() == Some(key.hash.as_str())
+                    || open_hash.as_deref() == Some(row.hash().as_str())
             })
-            .map(|(_, key)| key)
+            .map(|(_, row)| row)
             .collect();
-        for (shown, key) in listed.iter().enumerate() {
-            let tracked = masks.iter().any(|mask| key.matches_mask(mask));
+        for (shown, listed_key) in listed.iter().enumerate() {
             let edge = RowEdge {
                 first: shown == 0,
                 last: shown + 1 == listed.len() && !has_footer,
@@ -1358,8 +1690,7 @@ impl PopupRoot {
             list = list.child(self.render_key_row(
                 provider,
                 &account_id,
-                key,
-                tracked,
+                listed_key,
                 edge,
                 now,
                 window,
@@ -1372,7 +1703,7 @@ impl PopupRoot {
             } else {
                 crate::i18n::format(
                     "openrouter-keys-show-all",
-                    &[("count", keys.len().to_string())],
+                    &[("count", rows.len().to_string())],
                 )
             };
             let hover_id = fx::key(("or-key-show-all", account_id.as_str()));
@@ -1408,7 +1739,7 @@ impl PopupRoot {
                     .child(div().relative().child(caption(label, palette.accent_text))),
             );
         }
-        Some(section.child(list).into_any_element())
+        Some(section.child(list).children(hint).into_any_element())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1416,70 +1747,70 @@ impl PopupRoot {
         &mut self,
         provider: ProviderId,
         account_id: &str,
-        key: &ManagedKey,
-        tracked: bool,
+        listed: &ListedKey,
         edge: RowEdge,
         now: DateTime<Utc>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.palette.clone();
+        let hash = listed.hash();
         let row = RowId {
             account: account_id.to_owned(),
-            hash: key.hash.clone(),
+            hash: hash.clone(),
         };
         let removing = self.keys.removing.contains(&row);
         let presence = self.fx.toggle(
-            fx::key(("or-key-presence", account_id, key.hash.as_str())),
+            fx::key(("or-key-presence", account_id, hash.as_str())),
             !removing,
             fx::NORMAL,
         );
         let open = self.keys.open_row.as_ref() == Some(&row) && !removing;
         let reveal = self.fx.toggle(
-            fx::key(("or-key-open", account_id, key.hash.as_str())),
+            fx::key(("or-key-open", account_id, hash.as_str())),
             open,
             fx::NORMAL,
         );
-        let hover_id = fx::key(("or-key-row", account_id, key.hash.as_str()));
+        let hover_id = fx::key(("or-key-row", account_id, hash.as_str()));
         let hover = self.fx.toggle(
             fx::key(("or-key-row-fx", hover_id)),
             self.hovered(hover_id),
             fx::FASTER,
         );
-        let expired = key.is_expired(now);
-        let percent = used_percent(key);
-        let warn = percent.is_some_and(|percent| percent >= 80.0) && !key.disabled;
-        let full = percent.is_some_and(|percent| percent >= 100.0) && !key.disabled;
+        let view = KeyRowView::new(listed, now);
+        let inactive = view.expired || view.disabled;
+        let warn = view.percent.is_some_and(|percent| percent >= 80.0) && !view.disabled;
+        let full = view.percent.is_some_and(|percent| percent >= 100.0) && !view.disabled;
 
         let mut top = div().flex().flex_row().items_center().gap(px(8.0)).child(
             div()
                 .flex_1()
                 .min_w_0()
                 .child(nowrap(components::body_strong(
-                    key.name.clone(),
+                    listed.name().to_owned(),
                     palette.text_primary,
                 ))),
         );
-        if tracked {
+        if view.badge {
             top = top.child(self.key_badge(
                 crate::i18n::tr("openrouter-keys-this-app"),
                 palette.accent.opacity(0.16),
                 palette.accent,
             ));
         }
-        if expired {
+        if view.expired {
             top = top.child(self.key_badge(
                 crate::i18n::tr("expired"),
                 palette.critical_background,
                 palette.critical,
             ));
-        } else if key.disabled {
+        } else if view.disabled {
             top = top.child(self.key_badge(
                 crate::i18n::tr("disabled"),
                 palette.subtle_fill,
                 palette.text_secondary,
             ));
-        } else if let Some(percent) = percent.filter(|_| warn) {
+        } else if let Some(percent) = view.percent.filter(|_| warn) {
             let (fill, text) = if full {
                 (palette.critical_background, palette.critical)
             } else {
@@ -1489,8 +1820,8 @@ impl PopupRoot {
         }
         top = top
             .child(nowrap(components::body_strong(
-                usd(key.period_usage_microusd()),
-                if key.disabled || expired {
+                view.amount,
+                if inactive {
                     palette.text_tertiary
                 } else {
                     palette.accent_text
@@ -1503,7 +1834,7 @@ impl PopupRoot {
             );
 
         let mut head = div()
-            .id(eid(format!("or-key-{account_id}-{}", key.hash)))
+            .id(eid(format!("or-key-{account_id}-{hash}")))
             .relative()
             .px(px(12.0))
             .py(px(10.0))
@@ -1515,14 +1846,14 @@ impl PopupRoot {
             }));
         }
         let mut content = div().relative().flex().flex_col().gap(px(4.0)).child(top);
-        if let Some(percent) = percent.filter(|_| !key.disabled && !expired) {
+        if let Some(percent) = view.percent.filter(|_| !inactive) {
             let shown = if self.ui.show_used_percentage {
                 percent
             } else {
                 100.0 - percent
             };
             let shown = self.fx.value(
-                fx::key(("or-key-progress", account_id, key.hash.as_str())),
+                fx::key(("or-key-progress", account_id, hash.as_str())),
                 shown,
                 fx::NORMAL,
             );
@@ -1535,24 +1866,20 @@ impl PopupRoot {
             };
             content = content.child(components::progress_track(shown, None, 0, fill, &palette));
         }
-        let today = (!key.disabled && !expired).then(|| {
-            crate::i18n::format(
-                "openrouter-keys-today",
-                &[("amount", usd(key.usage_daily_microusd))],
-            )
-        });
         content = content.child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap(px(8.0))
-                .child(div().flex_1().min_w_0().child(nowrap(caption(
-                    key_summary(key, now),
-                    palette.text_tertiary,
-                ))))
-                .when_some(today, |el, today| {
-                    el.child(nowrap(caption(today, palette.text_tertiary)).flex_none())
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(nowrap(caption(view.summary, palette.text_tertiary))),
+                )
+                .when_some(view.aside, |el, aside| {
+                    el.child(nowrap(caption(aside, palette.text_tertiary)).flex_none())
                 }),
         );
         head = head
@@ -1580,10 +1907,30 @@ impl PopupRoot {
             })
             .child(head);
         if reveal > 0.001 {
-            let body = if self.keys.confirm_delete.as_ref() == Some(&row) {
-                self.render_delete_confirm(row.clone(), key, cx)
-            } else {
-                self.render_key_editor(provider, row.clone(), key, tracked, window, cx)
+            let tracked = listed.tracked_id().map(str::to_owned);
+            let untracking = self
+                .keys
+                .untrack
+                .as_ref()
+                .is_some_and(|untrack| untrack.row == row);
+            let body = match (listed, tracked) {
+                (ListedKey::Managed { key, .. }, tracked)
+                    if self.keys.confirm_delete.as_ref() == Some(&row) =>
+                {
+                    self.render_delete_confirm(row.clone(), key, tracked, cx)
+                }
+                (_, Some(key_id)) if untracking => {
+                    self.render_untrack_confirm(row.clone(), listed.name(), key_id, cx)
+                }
+                (ListedKey::Managed { key, tracked }, _) => self.render_key_editor(
+                    provider,
+                    row.clone(),
+                    key,
+                    tracked.is_some(),
+                    window,
+                    cx,
+                ),
+                (ListedKey::Tracked(key), _) => self.render_tracked_details(row.clone(), key, cx),
             };
             element = element.child(
                 div()
@@ -1601,6 +1948,144 @@ impl PopupRoot {
                 .opacity(presence);
         }
         element.into_any_element()
+    }
+
+    /// Opens the "Remove from app" confirmation for a row.
+    fn untrack_button(
+        &mut self,
+        row: RowId,
+        tone: Tone,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id = format!("untrack-{}-{}", row.account, row.hash);
+        self.key_button(
+            id,
+            crate::i18n::tr("openrouter-keys-untrack").into(),
+            Some("fluent-delete"),
+            tone,
+            disabled,
+            None,
+            move |this, _, cx| {
+                this.keys.confirm_delete = None;
+                if let Some(editor) = this.keys.editor.as_mut() {
+                    editor.error = None;
+                }
+                this.keys.untrack = Some(Untrack {
+                    row: row.clone(),
+                    busy: false,
+                    error: None,
+                });
+                cx.notify();
+            },
+            cx,
+        )
+    }
+
+    /// An expanded tracked-only row: the key's fingerprint and its removal.
+    fn render_tracked_details(
+        &mut self,
+        row: RowId,
+        key: &TrackedKey,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let palette = self.palette.clone();
+        let remove = self.untrack_button(row, Tone::Danger, false, cx);
+        let fingerprint = key.masked.clone().map(|masked| {
+            div()
+                .font_family("Consolas")
+                .child(nowrap(caption(masked, palette.text_tertiary)))
+        });
+        div()
+            .px(px(12.0))
+            .pb(px(12.0))
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .child(components::rule(&palette))
+            .child(components::split_row(
+                div().min_w_0().children(fingerprint),
+                remove,
+            ))
+            .into_any_element()
+    }
+
+    fn render_untrack_confirm(
+        &mut self,
+        row: RowId,
+        name: &str,
+        key_id: String,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let palette = self.palette.clone();
+        let (busy, error) = self
+            .keys
+            .untrack
+            .as_ref()
+            .filter(|untrack| untrack.row == row)
+            .map_or((false, None), |untrack| {
+                (untrack.busy, untrack.error.clone())
+            });
+        let id = format!("{}-{}", row.account, row.hash);
+        let keep = self.key_button(
+            format!("keep-tracking-{id}"),
+            crate::i18n::tr("openrouter-keys-keep").into(),
+            None,
+            Tone::Subtle,
+            busy,
+            None,
+            |this, _, cx| {
+                this.keys.untrack = None;
+                cx.notify();
+            },
+            cx,
+        );
+        let confirm = self.key_button(
+            format!("confirm-untrack-{id}"),
+            if busy {
+                crate::i18n::tr("openrouter-keys-untracking").into()
+            } else {
+                crate::i18n::tr("openrouter-keys-untrack").into()
+            },
+            None,
+            Tone::Accent,
+            busy,
+            None,
+            move |this, _, cx| this.untrack_key(row.clone(), key_id.clone(), cx),
+            cx,
+        );
+        div()
+            .px(px(12.0))
+            .pb(px(12.0))
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .child(components::rule(&palette))
+            .child(components::info_bar(
+                crate::i18n::format(
+                    "openrouter-keys-untrack-title",
+                    &[("name", name.to_owned())],
+                ),
+                crate::i18n::tr("openrouter-keys-untrack-message"),
+                Severity::Caution,
+                &palette,
+            ))
+            .when_some(error, |el, error| {
+                el.child(caption(
+                    crate::i18n::localize_error(&error),
+                    palette.critical,
+                ))
+            })
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .justify_end()
+                    .gap(px(6.0))
+                    .child(keep)
+                    .child(confirm),
+            )
+            .into_any_element()
     }
 
     fn render_key_editor(
@@ -1703,9 +2188,10 @@ impl PopupRoot {
                 crate::i18n::tr("openrouter-keys-delete").into(),
                 Some("fluent-delete"),
                 Tone::Danger,
-                tracked || saving,
-                tracked.then(|| crate::i18n::tr("openrouter-keys-delete-tracked").into()),
+                saving,
+                None,
                 move |this, _, cx| {
+                    this.keys.untrack = None;
                     this.keys.confirm_delete = Some(row.clone());
                     if let Some(editor) = this.keys.editor.as_mut() {
                         editor.error = None;
@@ -1715,6 +2201,7 @@ impl PopupRoot {
                 cx,
             )
         };
+        let untrack = tracked.then(|| self.untrack_button(row.clone(), Tone::Subtle, saving, cx));
         let cancel = {
             let row = row.clone();
             self.key_button(
@@ -1764,6 +2251,15 @@ impl PopupRoot {
             )
             .child(byok_row)
             .child(enabled_row)
+            .when_some(untrack, |el, untrack| {
+                el.child(components::split_row(
+                    div().min_w_0().child(caption(
+                        crate::i18n::tr("openrouter-keys-tracked-here"),
+                        palette.text_secondary,
+                    )),
+                    untrack,
+                ))
+            })
             .when_some(error, |el, error| {
                 el.child(caption(
                     crate::i18n::localize_error(&error),
@@ -1786,6 +2282,7 @@ impl PopupRoot {
         &mut self,
         row: RowId,
         key: &ManagedKey,
+        tracked: Option<String>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.palette.clone();
@@ -1798,6 +2295,7 @@ impl PopupRoot {
                 (editor.deleting, editor.error.clone())
             });
         let id = format!("{}-{}", row.account, row.hash);
+        let also_untracks = tracked.is_some();
         let keep = self.key_button(
             format!("keep-{id}"),
             crate::i18n::tr("openrouter-keys-keep").into(),
@@ -1824,7 +2322,7 @@ impl PopupRoot {
                 Tone::Critical,
                 deleting,
                 None,
-                move |this, _, cx| this.delete_key(row.clone(), cx),
+                move |this, _, cx| this.delete_key(row.clone(), tracked.clone(), cx),
                 cx,
             )
         };
@@ -1844,6 +2342,12 @@ impl PopupRoot {
                 Severity::Error,
                 &palette,
             ))
+            .when(also_untracks, |el| {
+                el.child(caption(
+                    crate::i18n::tr("openrouter-keys-delete-tracked"),
+                    palette.text_secondary,
+                ))
+            })
             .when_some(error, |el, error| {
                 el.child(caption(
                     crate::i18n::localize_error(&error),

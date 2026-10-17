@@ -3465,7 +3465,7 @@ openrouter-keys-delete = { "" }
 
 
 # English source:
-# openrouter-keys-delete-tracked = This app uses this key. Remove it in Settings first.
+# openrouter-keys-delete-tracked = Minibar also stops tracking it.
 openrouter-keys-delete-tracked = { "" }
 
 
@@ -3647,6 +3647,30 @@ openrouter-keys-not-a-management-key = { "" }
 # English source:
 # openrouter-keys-key-not-found = This key no longer exists.
 openrouter-keys-key-not-found = { "" }
+
+# English source:
+# openrouter-keys-untrack = Remove from app
+openrouter-keys-untrack = { "" }
+
+# English source:
+# openrouter-keys-untracking = Removing…
+openrouter-keys-untracking = { "" }
+
+# English source:
+# openrouter-keys-untrack-title = Stop tracking “{ $name }”?
+openrouter-keys-untrack-title = { "" }
+
+# English source:
+# openrouter-keys-untrack-message = Minibar forgets this key. It keeps working on OpenRouter.
+openrouter-keys-untrack-message = { "" }
+
+# English source:
+# openrouter-keys-tracked-here = Minibar tracks this key.
+openrouter-keys-tracked-here = { "" }
+
+# English source:
+# openrouter-keys-manage-hint = Add a management key in Settings to create, edit and delete keys.
+openrouter-keys-manage-hint = { "" }
 
 # English source:
 # notification-sounds = Notification sounds

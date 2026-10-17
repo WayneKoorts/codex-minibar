@@ -1663,7 +1663,7 @@ openrouter-keys-reset-monthly = Mensalmente
 openrouter-keys-byok = Contar uso BYOK no limite
 openrouter-keys-enabled = Ativada
 openrouter-keys-delete = Excluir
-openrouter-keys-delete-tracked = Este app usa esta chave. Remova-a nas Configurações primeiro.
+openrouter-keys-delete-tracked = O Minibar também deixará de acompanhá-la.
 openrouter-keys-saving = Salvando…
 openrouter-keys-delete-title = Excluir “{ $name }”?
 openrouter-keys-delete-message = Tudo o que ainda usa esta chave para de funcionar imediatamente. Isso não pode ser desfeito; desativar a chave é reversível.
@@ -1700,6 +1700,12 @@ openrouter-keys-no-management-key = Esta conta não tem chave de gerenciamento.
 openrouter-keys-management-key-rejected = O OpenRouter rejeitou a chave de gerenciamento. Substitua-a nas Configurações.
 openrouter-keys-not-a-management-key = Esta chave não pode gerenciar outras chaves. Use uma chave de gerenciamento.
 openrouter-keys-key-not-found = Esta chave não existe mais.
+openrouter-keys-untrack = Remover do app
+openrouter-keys-untracking = Removendo…
+openrouter-keys-untrack-title = Parar de acompanhar “{ $name }”?
+openrouter-keys-untrack-message = O Minibar esquece esta chave. Ela continua funcionando no OpenRouter.
+openrouter-keys-tracked-here = O Minibar acompanha esta chave.
+openrouter-keys-manage-hint = Adicione uma chave de gerenciamento nas Configurações para criar, editar e excluir chaves.
 
 # src/settings_window/notifications.rs
 notification-sounds = Sons de notificação

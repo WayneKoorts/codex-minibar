@@ -2488,7 +2488,7 @@ openrouter-keys-enabled = Activé
 openrouter-keys-delete = Supprimer
 
 
-openrouter-keys-delete-tracked = Cette application utilise cette clé. Retirez-la d'abord dans les paramètres.
+openrouter-keys-delete-tracked = Minibar cessera aussi de la suivre.
 
 
 openrouter-keys-saving = Enregistrement…
@@ -2597,6 +2597,24 @@ openrouter-keys-not-a-management-key = Cette clé ne peut pas gérer d'autres cl
 
 
 openrouter-keys-key-not-found = Cette clé n'existe plus.
+
+
+openrouter-keys-untrack = Retirer de l'app
+
+
+openrouter-keys-untracking = Retrait…
+
+
+openrouter-keys-untrack-title = Ne plus suivre « { $name } » ?
+
+
+openrouter-keys-untrack-message = Minibar oublie cette clé. Elle continue de fonctionner sur OpenRouter.
+
+
+openrouter-keys-tracked-here = Minibar suit cette clé.
+
+
+openrouter-keys-manage-hint = Ajoutez une clé de gestion dans les paramètres pour créer, modifier et supprimer des clés.
 
 # src/settings_window/notifications.rs
 notification-sounds = Sons des notifications

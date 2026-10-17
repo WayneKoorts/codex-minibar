@@ -76,6 +76,12 @@ pub(crate) enum Card<'a> {
         /// `(account id, key id)` for the remove action of an expired key.
         delete: Option<(String, String)>,
     },
+    /// The provider tab's OpenRouter key list for one account. It replaces
+    /// the per-key spending cards there.
+    OpenRouterKeys {
+        provider: ProviderId,
+        account: &'a str,
+    },
     AccountHeading {
         id: &'a str,
         name: &'a str,
@@ -114,6 +120,15 @@ pub(crate) enum Card<'a> {
 }
 
 impl Card<'_> {
+    /// Whether this card is, or a group carries, an OpenRouter key list.
+    pub(crate) fn has_key_list(&self) -> bool {
+        match self {
+            Self::OpenRouterKeys { .. } => true,
+            Self::Group { cards } => cards.iter().any(Self::has_key_list),
+            _ => false,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn is_usage_statistics(&self) -> bool {
         matches!(self, Self::UsageStatistics { .. })
@@ -230,7 +245,10 @@ pub(crate) fn provider_cards<'a>(
     if kind == ProviderKind::OpenRouter {
         let spending_visible = visible(&spending_brick_id(kind));
         let usage_visible = options.include_usage_stats && visible(&usage_brick_id(kind));
-        if spending_visible || usage_visible {
+        // The provider tab lists keys in one administrable list instead of a
+        // spending card per tracked key; it stays even with spending hidden.
+        let key_list = options.surface == PopupSurface::ProviderTab;
+        if spending_visible || usage_visible || key_list {
             if !limits.openrouter_accounts.is_empty() {
                 // Each account is its own group so headings and keys can
                 // never be shuffled across account boundaries.
@@ -243,11 +261,17 @@ pub(crate) fn provider_cards<'a>(
                             balance_microusd: account.balance_microusd,
                         });
                     }
+                    if key_list {
+                        strip.push(Card::OpenRouterKeys {
+                            provider,
+                            account: &account.id,
+                        });
+                    }
                     for (index, api_key) in account
                         .api_keys
                         .iter()
                         .enumerate()
-                        .filter(|_| spending_visible)
+                        .filter(|_| spending_visible && !key_list)
                     {
                         let title = api_key
                             .local_name

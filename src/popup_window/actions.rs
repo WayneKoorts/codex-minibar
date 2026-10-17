@@ -9,15 +9,22 @@ pub(crate) fn remove_openrouter_api_key(
     key_id: String,
     settings_tx: Sender<Settings>,
 ) {
+    if let Err(error) = try_remove_openrouter_api_key(account_id, key_id, settings_tx) {
+        notifications::show_error("OpenRouter key not removed", &format!("{error:#}"));
+    }
+}
+
+/// Stops tracking an OpenRouter API key: its secret leaves the vault and its
+/// id leaves the saved account. The key itself keeps working on OpenRouter.
+/// Blocking; call it off the UI thread.
+pub(crate) fn try_remove_openrouter_api_key(
+    account_id: String,
+    key_id: String,
+    settings_tx: Sender<Settings>,
+) -> anyhow::Result<()> {
     let change =
         crate::openrouter::AccountSecretChange::api_key(account_id.clone(), key_id.clone(), None);
-    let rollback = match crate::openrouter::apply_account_secret_changes(&[change]) {
-        Ok(rollback) => rollback,
-        Err(error) => {
-            notifications::show_error("OpenRouter key not removed", &format!("{error:#}"));
-            return;
-        }
-    };
+    let rollback = crate::openrouter::apply_account_secret_changes(&[change])?;
     if let Err(error) =
         crate::settings_window::try_persist_update_fallible(settings_tx, move |settings| {
             let instance = settings
@@ -44,12 +51,12 @@ pub(crate) fn remove_openrouter_api_key(
             Ok(())
         })
     {
-        let message = match rollback.restore() {
-            Ok(()) => format!("{error:#}"),
-            Err(rollback_error) => {
-                format!("{error:#}; restoring the protected key also failed: {rollback_error:#}")
-            }
-        };
-        notifications::show_error("OpenRouter key not removed", &message);
+        return Err(match rollback.restore() {
+            Ok(()) => error,
+            Err(rollback_error) => error.context(format!(
+                "restoring the protected key also failed: {rollback_error:#}"
+            )),
+        });
     }
+    Ok(())
 }

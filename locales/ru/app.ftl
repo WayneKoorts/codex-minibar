@@ -2504,7 +2504,7 @@ openrouter-keys-enabled = Включён
 openrouter-keys-delete = Удалить
 
 
-openrouter-keys-delete-tracked = Этот ключ использует приложение. Сначала удалите его в настройках.
+openrouter-keys-delete-tracked = Minibar также перестанет его отслеживать.
 
 
 openrouter-keys-saving = Сохранение…
@@ -2613,6 +2613,24 @@ openrouter-keys-not-a-management-key = Этот ключ не может упр�
 
 
 openrouter-keys-key-not-found = Этот ключ больше не существует.
+
+
+openrouter-keys-untrack = Убрать из приложения
+
+
+openrouter-keys-untracking = Удаление…
+
+
+openrouter-keys-untrack-title = Перестать отслеживать «{ $name }»?
+
+
+openrouter-keys-untrack-message = Minibar забудет этот ключ. В OpenRouter он продолжит работать.
+
+
+openrouter-keys-tracked-here = Minibar отслеживает этот ключ.
+
+
+openrouter-keys-manage-hint = Добавьте ключ управления в настройках, чтобы создавать, изменять и удалять ключи.
 
 # src/settings_window/notifications.rs
 notification-sounds = Звуки уведомлений

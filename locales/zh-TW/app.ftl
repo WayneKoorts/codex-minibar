@@ -1642,7 +1642,7 @@ openrouter-keys-reset-monthly = 每月
 openrouter-keys-byok = 將 BYOK 用量計入限額
 openrouter-keys-enabled = 已啟用
 openrouter-keys-delete = 刪除
-openrouter-keys-delete-tracked = 此應用程式正在使用此金鑰。請先在設定中將其移除。
+openrouter-keys-delete-tracked = Minibar 也將停止追蹤它。
 openrouter-keys-saving = 正在儲存…
 openrouter-keys-delete-title = 刪除「{ $name }」？
 openrouter-keys-delete-message = 所有仍在使用此金鑰的地方將立即停止工作。此操作無法復原；停用金鑰則可以恢復。
@@ -1679,6 +1679,12 @@ openrouter-keys-no-management-key = 此帳號沒有管理金鑰。
 openrouter-keys-management-key-rejected = OpenRouter 拒絕了管理金鑰。請在設定中替換它。
 openrouter-keys-not-a-management-key = 此金鑰無法管理其他金鑰。請使用管理金鑰。
 openrouter-keys-key-not-found = 此金鑰已不存在。
+openrouter-keys-untrack = 從應用程式中移除
+openrouter-keys-untracking = 正在移除…
+openrouter-keys-untrack-title = 停止追蹤「{ $name }」？
+openrouter-keys-untrack-message = Minibar 將忘記此金鑰。它在 OpenRouter 上仍可繼續使用。
+openrouter-keys-tracked-here = Minibar 正在追蹤此金鑰。
+openrouter-keys-manage-hint = 在設定中新增管理金鑰，即可建立、編輯和刪除金鑰。
 
 # src/settings_window/notifications.rs
 notification-sounds = 通知聲音
